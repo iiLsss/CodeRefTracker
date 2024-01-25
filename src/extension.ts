@@ -1,26 +1,63 @@
-// The module 'vscode' contains the VS Code extensibility API
-// Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
+import { Logger } from './logger';
 
-// This method is called when your extension is activated
-// Your extension is activated the very first time the command is executed
+import { FileParser, FileReference } from './fileParser';
+
+function getWebviewContent() {
+  // 在这里编写你的HTML和JavaScript代码
+  // 例如，你可以使用D3.js来创建一个图形
+  return `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Graph View</title>
+    </head>
+    <body>
+        <div id="d3-container">
+				阿基德金娃来得及
+				</div>
+    </body>
+    </html>`;
+}
+
+let myStatusBarItem: vscode.StatusBarItem;
+
 export function activate(context: vscode.ExtensionContext) {
 
-	// Use the console to output diagnostic information (console.log) and errors (console.error)
-	// This line of code will only be executed once when your extension is activated
-	console.log('Congratulations, your extension "codereftracker" is now active!');
+	const logger = new Logger();
 
-	// The command has been defined in the package.json file
-	// Now provide the implementation of the command with registerCommand
-	// The commandId parameter must match the command field in package.json
-	let disposable = vscode.commands.registerCommand('codereftracker.helloWorld', () => {
-		// The code you place here will be executed every time your command is executed
-		// Display a message box to the user
-		vscode.window.showInformationMessage('Hello World from CodeRefTracker!');
-	});
+	logger.log('Starting File Graph');
 
-	context.subscriptions.push(disposable);
+	let disposable = vscode.commands.registerCommand('codereftracker.showGraph', function () {
+    // 创建webview
+    const panel = vscode.window.createWebviewPanel(
+      'graphView', // 视图标识符
+      'Graph View', // 视图标题
+      vscode.ViewColumn.One, // 显示在编辑器的哪个部位
+      {
+        // 允许webview运行JavaScript
+        enableScripts: true,
+        // 限制webview可以链接的资源
+        localResourceRoots: [vscode.Uri.file(context.extensionPath)]
+      }
+    );
+	  logger.log('Starting File Graph');
+
+    // 设置webview的HTML内容
+    panel.webview.html = getWebviewContent();
+  });
+  context.subscriptions.push(disposable);
+
+	myStatusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 1);
+	myStatusBarItem.command = 'codereftracker.showGraph';
+	myStatusBarItem.text = 'File Graph';
+	myStatusBarItem.tooltip = 'View File Graph';
+	myStatusBarItem.show();
 }
 
 // This method is called when your extension is deactivated
-export function deactivate() {}
+export function deactivate() {
+	console.log('===>');
+}

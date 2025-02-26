@@ -1,5 +1,5 @@
 {
-  "name": "codereftracker",
+  "name": "code-ref-tracker",
   "displayName": "CodeRefTracker",
   "description": "CodeRefTracker is a Visual Studio Code extension that displays the number of references for each file directly in the sidebar directory. This provides an intuitive way to understand the reference situation of your code. In addition, by clicking on the extension sidebar, users can view a reference roadmap of each file in the entire project, which is very helpful for understanding and optimizing code structure. Whether you are engaged in daily development work or trying to understand a new project, CodeRefTracker is an indispensable tool.",
   "version": "0.0.1",

@@ -1,7 +1,7 @@
 import * as vscode from 'vscode'
 import { Logger } from './logger'
 import { CommandManager } from './commands'
-import { StatusBarItem } from './statusBarItem'
+import { StatusBarItem } from './ui/statusBarItem'
 
 export function activate(context: vscode.ExtensionContext) {
 	const logger = new Logger()

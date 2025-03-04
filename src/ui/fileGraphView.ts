@@ -19,7 +19,6 @@ export class FileGraphView {
 		this._logger = logger;
 
 		this._panel.onDidDispose(() => this.dispose(), null, this._disposables);
-
 		this._panel.webview.onDidReceiveMessage(
 			message => {
 				switch (message.type) {
@@ -63,59 +62,33 @@ export class FileGraphView {
 		return FileGraphView.currentPanel;
 	}
 
-	public updateContent(fileTree: TreeNode, fileInfoMap: Map<string, FileInfo>) {
+	public updateContent(graphData: any) {
 		if (this._panel.webview) {
-			// Convert data for the webview
-			const graphData = this.prepareGraphData(fileTree, fileInfoMap);
-
 			// Update the webview content
 			this._panel.webview.html = this.getWebviewContent();
 
-			// Send data to the webview
+			// Send data directly to the webview since it's already in the correct format
 			this._panel.webview.postMessage({
 				type: 'update',
-				data: graphData,
+				data: {
+					tree: graphData.tree,
+					nodes: graphData.nodes,
+					links: graphData.links,
+				},
 			});
 		}
 	}
 
-	private prepareGraphData(fileTree: TreeNode, fileInfoMap: Map<string, FileInfo>) {
-		// Transform the data into a format suitable for D3.js visualization
-		const nodes: any[] = [];
-		const links: any[] = [];
+	// Remove or comment out the old prepareGraphData and traverseTree methods as they're no longer needed
+	/*
+    private prepareGraphData(fileTree: TreeNode, fileInfoMap: Map<string, FileInfo>) {
+        // ... old code ...
+    }
 
-		// Add nodes from fileTree
-		this.traverseTree(fileTree, nodes);
-
-		// Add links from fileInfoMap
-		fileInfoMap.forEach((fileInfo, filePath) => {
-			fileInfo.references.forEach(ref => {
-				links.push({
-					source: filePath,
-					target: ref.target,
-					type: ref.type,
-				});
-			});
-		});
-
-		return { nodes, links };
-	}
-
-	private traverseTree(node: TreeNode, nodes: any[]) {
-		nodes.push({
-			id: node.path,
-			name: node.name,
-			type: node.type,
-			path: node.path,
-			children: node.children?.length || 0,
-		});
-
-		if (node.children) {
-			for (const child of node.children) {
-				this.traverseTree(child, nodes);
-			}
-		}
-	}
+    private traverseTree(node: TreeNode, nodes: any[]) {
+        // ... old code ...
+    }
+    */
 
 	private getWebviewContent(): string {
 		const htmlPath = path.join(this._extensionPath, 'src', 'ui', 'views', 'graph.html');

@@ -1,0 +1,50 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* 自定义样式 */
+@layer components {
+  .graph-container {
+    @apply w-full h-full bg-light-bg dark:bg-dark-bg;
+  }
+  
+  .node {
+    @apply fill-white stroke-primary stroke-2 cursor-pointer transition-all duration-200;
+  }
+  
+  .node:hover {
+    @apply fill-accent stroke-accent;
+  }
+  
+  .node.high-ref {
+    @apply fill-high-ref stroke-high-ref;
+  }
+  
+  .node.medium-ref {
+    @apply fill-medium-ref stroke-medium-ref;
+  }
+  
+  .node.low-ref {
+    @apply fill-low-ref stroke-low-ref;
+  }
+  
+  .link {
+    @apply stroke-gray-400 stroke-[1.5px] opacity-70;
+  }
+  
+  .link.incoming {
+    @apply stroke-incoming-ref;
+  }
+  
+  .link.outgoing {
+    @apply stroke-outgoing-ref;
+  }
+  
+  .panel {
+    @apply bg-white dark:bg-dark-bg rounded-lg shadow-lg p-4 m-2;
+  }
+  
+  .btn {
+    @apply px-4 py-2 rounded-md text-white bg-accent hover:bg-blue-600 transition-colors;
+  }
+} 

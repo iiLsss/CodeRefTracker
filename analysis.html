@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CodeRefTracker</title>
+    <style>
+        :root {
+            --vscode-bg: #1e1e1e;
+            --vscode-fg: #d4d4d4;
+            --vscode-panel-border: #444444;
+            --vscode-button-bg: #0e639c;
+            --vscode-button-fg: #ffffff;
+            --vscode-sidebar-bg: #252526;
+            --vscode-active-tab: #1e1e1e;
+            --vscode-inactive-tab: #2d2d2d;
+            --high-ref-color: #E67E22;
+            --medium-ref-color: #3498DB;
+            --low-ref-color: #95A5A6;
+            --incoming-ref-color: #27AE60;
+            --outgoing-ref-color: #8E44AD;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: var(--vscode-bg);
+            color: var(--vscode-fg);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .app-container {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        /* 文件树样式 */
+        .file-explorer {
+            width: 250px;
+            background-color: var(--vscode-sidebar-bg);
+            border-right: 1px solid var(--vscode-panel-border);
+            overflow-y: auto;
+            flex-shrink: 0;
+            padding: 8px 0;
+        }
+
+        .file-tree {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .file-tree li {
+            padding: 3px 8px 3px 20px;
+            position: relative;
+            white-space: nowrap;
+            cursor: pointer;
+        }
+
+        .file-tree li:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+
+        .file-tree .folder {
+            font-weight: bold;
+        }
+
+        .file-tree .folder::before {
+            content: "▶";
+            position: absolute;
+            left: 5px;
+            transition: transform 0.2s;
+        }
+
+        .file-tree .folder.expanded::before {
+            transform: rotate(90deg);
+        }
+
+        .file-tree .file {
+            padding-left: 25px;
+        }
+
+        .file-tree .ref-count {
+            margin-left: 8px;
+            font-size: 0.85em;
+            opacity: 0.8;
+        }
+
+        .file-tree .hot-file {
+            color: var(--high-ref-color);
+        }
+
+        .file-tree .hot-file::after {
+            content: "⭐";
+            margin-left: 4px;
+        }
+
+        .file-tree .very-hot-file::after {
+            content: "🔥";
+            margin-left: 4px;
+        }
+
+        /* 主内容区域 */
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* 工具栏 */
+        .toolbar {
+            padding: 8px 16px;
+            border-bottom: 1px solid var(--vscode-panel-border);
+            display: flex;
+            justify-content: space-between;
+            background-color: var(--vscode-inactive-tab);
+        }
+
+        .toolbar button {
+            background-color: var(--vscode-button-bg);
+            color: var(--vscode-button-fg);
+            border: none;
+            padding: 4px 8px;
+            margin-right: 8px;
+            cursor: pointer;
+            border-radius: 2px;
+        }
+
+        .toolbar button:hover {
+            opacity: 0.9;
+        }
+
+        .toolbar select {
+            background-color: var(--vscode-bg);
+            color: var(--vscode-fg);
+            border: 1px solid var(--vscode-panel-border);
+            padding: 3px 6px;
+            margin-right: 8px;
+        }
+
+        .toolbar input {
+            background-color: var(--vscode-bg);
+            color: var(--vscode-fg);
+            border: 1px solid var(--vscode-panel-border);
+            padding: 4px 8px;
+            width: 200px;
+        }
+
+        /* 图形区域 */
+        .graph-container {
+            flex: 1;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .graph-svg {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* 节点样式 */
+        .node circle {
+            stroke: var(--vscode-panel-border);
+            stroke-width: 1.5px;
+        }
+
+        .node text {
+            font-size: 10px;
+            fill: var(--vscode-fg);
+        }
+
+        .node.file circle {
+            fill: var(--medium-ref-color);
+        }
+
+        .node.hot-file circle {
+            fill: var(--high-ref-color);
+        }
+
+        .node.selected circle {
+            stroke: white;
+            stroke-width: 2px;
+        }
+
+        /* 连线样式 */
+        .link {
+            stroke: var(--vscode-fg);
+            stroke-opacity: 0.4;
+            stroke-width: 1.5px;
+        }
+
+        .link.incoming {
+            stroke: var(--incoming-ref-color);
+        }
+
+        .link.outgoing {
+            stroke: var(--outgoing-ref-color);
+        }
+
+        /* 详情面板 */
+        .details-panel {
+            height: 200px;
+            border-top: 1px solid var(--vscode-panel-border);
+            display: flex;
+            overflow: hidden;
+        }
+
+        .file-details, .references-list {
+            flex: 1;
+            padding: 12px;
+            overflow-y: auto;
+        }
+
+        .file-details {
+            border-right: 1px solid var(--vscode-panel-border);
+        }
+
+        .file-details h3, .references-list h3 {
+            margin-top: 0;
+            margin-bottom: 12px;
+            font-size: 14px;
+        }
+
+        .file-details dl {
+            margin: 0;
+            display: grid;
+            grid-template-columns: 100px 1fr;
+            row-gap: 4px;
+        }
+
+        .file-details dt {
+            font-weight: bold;
+            opacity: 0.8;
+        }
+
+        .references-list ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .references-list li {
+            padding: 4px 0;
+            cursor: pointer;
+        }
+
+        .references-list li:hover {
+            text-decoration: underline;
+        }
+
+        .references-list .section {
+            margin-bottom: 12px;
+        }
+
+        /* 响应式布局 */
+        @media (max-width: 1200px) {
+            .app-container {
+                flex-direction: column;
+            }
+            
+            .file-explorer {
+                width: 100%;
+                height: 200px;
+                border-right: none;
+                border-bottom: 1px solid var(--vscode-panel-border);
+            }
+        }
+
+        @media (max-width: 768px) {
+            .details-panel {
+                flex-direction: column;
+                height: 300px;
+            }
+            
+            .file-details {
+                border-right: none;
+                border-bottom: 1px solid var(--vscode-panel-border);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <!-- 文件资源管理器 -->
+        <div class="file-explorer">
+            <ul class="file-tree">
+                <li class="folder expanded">src (45)
+                    <ul>
+                        <li class="folder expanded">components
+                            <ul>
+                                <li class="file hot-file">Button.tsx <span class="ref-count">[2↑ 8↓]</span></li>
+                                <li class="file">Input.tsx <span class="ref-count">[1↑ 3↓]</span></li>
+                                <li class="file">Card.tsx <span class="ref-count">[2↑ 2↓]</span></li>
+                            </ul>
+                        </li>
+                        <li class="folder expanded">utils
+                            <ul>
+                                <li class="file very-hot-file">helpers.ts <span class="ref-count">[0↑ 12↓]</span></li>
+                                <li class="file">formatters.ts <span class="ref-count">[1↑ 4↓]</span></li>
+                            </ul>
+                        </li>
+                        <li class="file">App.tsx <span class="ref-count">[5↑ 0↓]</span></li>
+                        <li class="file">index.tsx <span class="ref-count">[3↑ 1↓]</span></li>
+                    </ul>
+                </li>
+                <li class="folder">public (2)</li>
+            </ul>
+        </div>
+
+        <!-- 主内容区域 -->
+        <div class="main-content">
+            <!-- 工具栏 -->
+            <div class="toolbar">
+                <div>
+                    <button>网络图</button>
+                    <button>树形图</button>
+                    <button>矩阵图</button>
+                    <button>热力图</button>
+                    <select>
+                        <option>按目录分组</option>
+                        <option>按文件类型分组</option>
+                        <option>按引用数量分组</option>
+                    </select>
+                </div>
+                <div>
+                    <input type="text" placeholder="搜索文件...">
+                    <button>导出</button>
+                    <button>设置</button>
+                </div>
+            </div>
+
+            <!-- 图形区域 -->
+            <div class="graph-container">
+                <svg class="graph-svg">
+                    <!-- 这里将通过D3.js动态生成图形 -->
+                    <!-- 以下是示例静态SVG内容 -->
+                    <defs>
+                        <marker id="arrow" viewBox="0 -5 10 10" refX="20" refY="0" markerWidth="6" markerHeight="6" orient="auto">
+                            <path d="M0,-5L10,0L0,5" fill="#d4d4d4"></path>
+                        </marker>
+                    </defs>
+                    <g transform="translate(400, 300) scale(1)">
+                        <!-- 连线 -->
+                        <g class="links">
+                            <line class="link outgoing" x1="0" y1="0" x2="100" y2="-80" marker-end="url(#arrow)"></line>
+                            <line class="link incoming" x1="-120" y1="-40" x2="0" y2="0" marker-end="url(#arrow)"></line>
+                            <line class="link incoming" x1="-100" y1="80" x2="0" y2="0" marker-end="url(#arrow)"></line>
+                            <line class="link incoming" x1="80" y1="100" x2="0" y2="0" marker-end="url(#arrow)"></line>
+                        </g>
+                        
+                        <!-- 节点 -->
+                        <g class="nodes">
+                            <g class="node file hot-file selected" transform="translate(0, 0)">
+                                <circle r="10"></circle>
+                                <text x="15" y="5">Button.tsx</text>
+                            </g>
+                            <g class="node file" transform="translate(100, -80)">
+                                <circle r="8"></circle>
+                                <text x="15" y="5">styles.css</text>
+                            </g>
+                            <g class="node file" transform="translate(-120, -40)">
+                                <circle r="8"></circle>
+                                <text x="15" y="5">App.tsx</text>
+                            </g>
+                            <g class="node file" transform="translate(-100, 80)">
+                                <circle r="8"></circle>
+                                <text x="15" y="5">LoginForm.tsx</text>
+                            </g>
+                            <g class="node file" transform="translate(80, 100)">
+                                <circle r="8"></circle>
+                                <text x="15" y="5">HomePage.tsx</text>
+                            </g>
+                        </g>
+                    </g>
+                </svg>
+            </div>
+
+            <!-- 详情面板 -->
+            <div class="details-panel">
+                <div class="file-details">
+                    <h3>文件详情</h3>
+                    <dl>
+                        <dt>文件名:</dt>
+                        <dd>Button.tsx</dd>
+                        
+                        <dt>路径:</dt>
+                        <dd>/src/components/Button.tsx</dd>
+                        
+                        <dt>大小:</dt>
+                        <dd>2.4 KB</dd>
+                        
+                        <dt>最后修改:</dt>
+                        <dd>2023-03-15 (2天前)</dd>
+                        
+                        <dt>引用:</dt>
+                        <dd>2个文件</dd>
+                        
+                        <dt>被引用:</dt>
+                        <dd>8个文件</dd>
+                        
+                        <dt>引用类型:</dt>
+                        <dd>import (8), require (0)</dd>
+                    </dl>
+                </div>
+                
+                <div class="references-list">
+                    <div class="section">
+                        <h3>引用此文件的文件 (8)</h3>
+                        <ul>
+                            <li>App.tsx</li>
+                            <li>HomePage.tsx</li>
+                            <li>LoginForm.tsx</li>
+                            <li>SignupForm.tsx</li>
+                            <li>Navbar.tsx</li>
+                            <li>Sidebar.tsx</li>
+                            <li>Modal.tsx</li>
+                            <li>Dialog.tsx</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="section">
+                        <h3>此文件引用的文件 (2)</h3>
+                        <ul>
+                            <li>React (node_modules)</li>
+                            <li>styles.css</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 这里将添加交互逻辑
+        // 以下是简单的文件树交互示例
+        document.querySelectorAll('.folder').forEach(folder => {
+            folder.addEventListener('click', (e) => {
+                if (e.target === folder) {
+                    folder.classList.toggle('expanded');
+                    const childList = folder.querySelector('ul');
+                    if (childList) {
+                        childList.style.display = folder.classList.contains('expanded') ? 'block' : 'none';
+                    }
+                    e.stopPropagation();
+                }
+            });
+        });
+
+        // 在实际应用中，这里将添加D3.js代码来实现交互式图形
+        // 例如：节点拖拽、缩放、高亮相关节点等功能
+    </script>
+</body>
+</html>

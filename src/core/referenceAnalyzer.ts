@@ -6,6 +6,10 @@ import { FileReference, FileInfo, ReferenceType } from '../types/references';
 
 export class ReferenceAnalyzer {
 	private logger: Logger;
+	private fileInfoCache = new Map<string, FileInfo>();
+	private fileTimestamps = new Map<string, number>();
+	private analyzing = false;
+	private pendingAnalysis = false;
 
 	constructor(logger: Logger) {
 		this.logger = logger;
@@ -16,18 +20,46 @@ export class ReferenceAnalyzer {
 	 */
 	public async analyzeWorkspace(files: string[]): Promise<Map<string, FileInfo>> {
 		const fileInfoMap = new Map<string, FileInfo>();
-
-		// Initialize file info objects
+		const filesToAnalyze: string[] = [];
+		
+		// Check which files need to be re-analyzed
 		for (const file of files) {
-			fileInfoMap.set(file, {
-				path: file,
-				references: [],
-				referencedBy: [],
-			});
+			try {
+				const stats = fs.statSync(file);
+				const lastModified = stats.mtimeMs;
+				
+				if (!this.fileTimestamps.has(file) || this.fileTimestamps.get(file) !== lastModified) {
+					// File is new or modified, needs re-analysis
+					filesToAnalyze.push(file);
+					this.fileTimestamps.set(file, lastModified);
+				} else {
+					// Use cached result
+					const cachedInfo = this.fileInfoCache.get(file);
+					if (cachedInfo) {
+						fileInfoMap.set(file, {...cachedInfo, references: [], referencedBy: []});
+					} else {
+						filesToAnalyze.push(file);
+					}
+				}
+			} catch (error) {
+				this.logger.error(`Error checking file stats for ${file}: ${error}`);
+				filesToAnalyze.push(file);
+			}
 		}
 
-		// Find references across files
+		// Initialize file info objects for all files
 		for (const file of files) {
+			if (!fileInfoMap.has(file)) {
+				fileInfoMap.set(file, {
+					path: file,
+					references: [],
+					referencedBy: [],
+				});
+			}
+		}
+
+		// Find references for files that need analysis
+		for (const file of filesToAnalyze) {
 			try {
 				const content = fs.readFileSync(file, 'utf8');
 
@@ -37,26 +69,59 @@ export class ReferenceAnalyzer {
 				if (outgoingRefs.length > 0) {
 					const fileInfo = fileInfoMap.get(file)!;
 					fileInfo.references = outgoingRefs;
-
-					// Add incoming references to target files
-					for (const ref of outgoingRefs) {
-						const targetFile = fileInfoMap.get(ref.target);
-						if (targetFile) {
-							targetFile.referencedBy.push({
-								source: file,
-								target: ref.target, // 添加缺少的 target 属性
-								line: ref.line,
-								type: ref.type,
-							});
-						}
-					}
 				}
 			} catch (error) {
 				this.logger.error(`Error analyzing file ${file}: ${error}`);
 			}
 		}
 
+		// Process all references to build the complete reference map
+		for (const [filePath, fileInfo] of fileInfoMap.entries()) {
+			// Add incoming references to target files
+			for (const ref of fileInfo.references) {
+				const targetFile = fileInfoMap.get(ref.target);
+				if (targetFile) {
+					targetFile.referencedBy.push({
+						source: filePath,
+						target: ref.target,
+						line: ref.line,
+						type: ref.type,
+					});
+				}
+			}
+		}
+
+		// Update cache with new results
+		for (const [file, info] of fileInfoMap.entries()) {
+			this.fileInfoCache.set(file, {...info});
+		}
+
 		return fileInfoMap;
+	}
+
+	/**
+	 * Schedule analysis in the background
+	 */
+	public async scheduleAnalysis(files: string[]): Promise<Map<string, FileInfo> | null> {
+		if (this.analyzing) {
+			this.pendingAnalysis = true;
+			return null;
+		}
+		
+		this.analyzing = true;
+		
+		try {
+			const results = await this.analyzeWorkspace(files);
+			return results;
+		} finally {
+			this.analyzing = false;
+			
+			if (this.pendingAnalysis) {
+				this.pendingAnalysis = false;
+				// Return null to indicate that another analysis is scheduled
+				return null;
+			}
+		}
 	}
 
 	/**

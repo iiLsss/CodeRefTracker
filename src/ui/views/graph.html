@@ -1,199 +1,849 @@
-ui/views/graphPanel.html
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Code Reference Graph</title>
+    <title>Code References Graph</title>
     <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+        :root {
+            /* Color palette */
+            --primary-color: #2c3e50;
+            --secondary-color: #34495e;
+            --accent-color: #3498db;
+            --light-bg: #ecf0f1;
+            --dark-bg: #2c3e50;
+            --text-light: #ecf0f1;
+            --text-dark: #2c3e50;
+            
+            /* Reference colors */
+            --high-ref-color: #E67E22; /* Orange */
+            --medium-ref-color: #3498DB; /* Blue */
+            --low-ref-color: #95A5A6; /* Gray */
+            --incoming-ref-color: #27AE60; /* Green */
+            --outgoing-ref-color: #8E44AD; /* Purple */
+        }
+        
+        * {
             margin: 0;
             padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        body {
+            background-color: var(--light-bg);
+            color: var(--text-dark);
             height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        
+        .toolbar {
+            background-color: var(--secondary-color);
+            color: var(--text-light);
+            padding: 10px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        
+        .toolbar-group {
+            display: flex;
+            gap: 5px;
+            align-items: center;
+        }
+        
+        .toolbar-divider {
+            width: 1px;
+            height: 20px;
+            background-color: rgba(255, 255, 255, 0.3);
+            margin: 0 5px;
+        }
+        
+        .btn {
+            padding: 5px 10px;
+            border-radius: 4px;
+            border: none;
+            cursor: pointer;
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        
+        .btn-primary {
+            background-color: var(--accent-color);
+            color: white;
+        }
+        
+        .btn-secondary {
+            background-color: rgba(255, 255, 255, 0.2);
+            color: white;
+        }
+        
+        .btn-icon {
+            background: none;
+            border: none;
+            color: var(--text-light);
+            cursor: pointer;
+            font-size: 1.1rem;
+            padding: 5px;
+            border-radius: 4px;
+        }
+        
+        .btn-icon:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+        
+        .main-container {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+        
+        .visualization-area {
+            flex: 1;
+            background-color: white;
+            overflow: hidden;
+            position: relative;
+        }
+        
+        .view {
+            width: 100%;
+            height: 100%;
+            display: none;
+        }
+        
+        .view.active {
+            display: block;
+        }
+        
+        /* Network Graph View */
+        #network-view {
+            background-image: radial-gradient(#e0e0e0 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+        
+        .node {
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background-color: var(--medium-ref-color);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        
+        .node:hover {
+            transform: scale(1.1);
+        }
+        
+        .node.high-ref {
+            background-color: var(--high-ref-color);
+        }
+        
+        .node.config-file {
+            border-radius: 0;
+        }
+        
+        .node.entry-file {
+            clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
+        }
+        
+        .node.core-file {
+            clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+        }
+        
+        .edge {
+            position: absolute;
+            height: 2px;
+            background-color: rgba(0, 0, 0, 0.2);
+            transform-origin: left center;
+            pointer-events: none;
+        }
+        
+        .edge.strong {
+            height: 3px;
+            background-color: rgba(0, 0, 0, 0.4);
+        }
+        
+        /* Tree View */
+        #tree-view {
+            padding: 20px;
+            overflow: auto;
+        }
+        
+        .tree-container {
             display: flex;
             flex-direction: column;
         }
         
-        #toolbar {
-            padding: 10px;
-            border-bottom: 1px solid var(--vscode-panel-border);
+        .tree-node {
             display: flex;
-            justify-content: space-between;
-            background-color: var(--vscode-editor-background);
+            align-items: center;
+            padding: 5px;
+            margin: 2px 0;
+            border-radius: 4px;
         }
         
-        #container {
-            flex: 1;
+        .tree-node:hover {
+            background-color: rgba(0, 0, 0, 0.05);
+        }
+        
+        .tree-node-content {
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+        }
+        
+        .tree-node-icon {
+            margin-right: 5px;
+            width: 16px;
+            text-align: center;
+        }
+        
+        .tree-node-label {
+            font-size: 14px;
+        }
+        
+        .tree-node-badge {
+            font-size: 12px;
+            padding: 2px 5px;
+            border-radius: 10px;
+            margin-left: 5px;
+            background-color: rgba(0, 0, 0, 0.1);
+        }
+        
+        .tree-children {
+            margin-left: 20px;
+        }
+        
+        /* Matrix View */
+        #matrix-view {
+            padding: 20px;
             overflow: auto;
-            position: relative;
         }
         
-        #graph-container {
-            position: absolute;
+        .matrix-container {
+            display: grid;
+            grid-template-columns: auto;
+            grid-auto-rows: 30px;
+            gap: 1px;
+        }
+        
+        .matrix-header {
+            position: sticky;
+            top: 0;
+            background-color: var(--light-bg);
+            z-index: 10;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 12px;
+            padding: 5px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        .matrix-row-header {
+            position: sticky;
+            left: 0;
+            background-color: var(--light-bg);
+            z-index: 5;
+            display: flex;
+            align-items: center;
+            font-weight: bold;
+            font-size: 12px;
+            padding: 5px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        .matrix-cell {
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid rgba(0, 0, 0, 0.1);
+        }
+        
+        .matrix-cell.has-reference {
+            background-color: var(--medium-ref-color);
+            cursor: pointer;
+        }
+        
+        /* Heatmap View */
+        #heatmap-view {
             width: 100%;
             height: 100%;
         }
         
-        .node {
+        .heatmap-container {
+            width: 100%;
+            height: 100%;
+            display: flex;
+        }
+        
+        .heatmap-cell {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 12px;
+            cursor: pointer;
+            transition: transform 0.2s;
+            position: relative;
+        }
+        
+        .heatmap-cell:hover {
+            transform: scale(1.05);
+            z-index: 10;
+        }
+        
+        .heatmap-label {
+            position: absolute;
+            bottom: 5px;
+            left: 5px;
+            font-size: 10px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 90%;
+        }
+        
+        /* Details Panel */
+        .details-panel {
+            height: 200px;
+            border-top: 1px solid #bdc3c7;
+            display: flex;
+        }
+        
+        .file-details {
+            width: 30%;
+            padding: 15px;
+            background-color: var(--light-bg);
+            border-right: 1px solid #bdc3c7;
+            overflow: auto;
+        }
+        
+        .file-details-header {
+            font-weight: bold;
+            margin-bottom: 10px;
+            font-size: 1.1rem;
+        }
+        
+        .file-details-content {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        
+        .detail-item {
+            display: flex;
+            justify-content: space-between;
+        }
+        
+        .detail-label {
+            color: #7f8c8d;
+        }
+        
+        .references-list {
+            flex: 1;
+            padding: 15px;
+            overflow: auto;
+        }
+        
+        .references-header {
+            font-weight: bold;
+            margin-bottom: 10px;
+            font-size: 1.1rem;
+        }
+        
+        .references-tabs {
+            display: flex;
+            border-bottom: 1px solid #bdc3c7;
+            margin-bottom: 10px;
+        }
+        
+        .references-tab {
+            padding: 5px 15px;
             cursor: pointer;
         }
         
-        .node circle {
-            fill: var(--vscode-button-background);
-            stroke: var(--vscode-button-border);
-            stroke-width: 1.5px;
+        .references-tab.active {
+            border-bottom: 2px solid var(--accent-color);
+            color: var(--accent-color);
+            font-weight: bold;
         }
         
-        .node text {
-            font-size: 10px;
-            fill: var(--vscode-foreground);
+        .reference-item {
+            padding: 5px 0;
+            display: flex;
+            align-items: center;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.05);
         }
         
-        .link {
-            fill: none;
-            stroke: var(--vscode-editor-foreground);
-            stroke-opacity: 0.4;
-            stroke-width: 1.5px;
+        .reference-icon {
+            margin-right: 10px;
+            color: var(--medium-ref-color);
         }
         
-        .tooltip {
+        .reference-path {
+            font-size: 0.8rem;
+            color: #7f8c8d;
+            margin-left: 10px;
+        }
+        
+        /* Zoom Controls */
+        .zoom-controls {
             position: absolute;
-            background-color: var(--vscode-editor-background);
-            border: 1px solid var(--vscode-panel-border);
+            bottom: 20px;
+            right: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            background-color: white;
             border-radius: 4px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+        
+        .zoom-btn {
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 1.2rem;
+        }
+        
+        .zoom-btn:hover {
+            background-color: rgba(0, 0, 0, 0.05);
+        }
+        
+        /* Node Tooltip */
+        .node-tooltip {
+            position: absolute;
+            background-color: white;
+            border-radius: 4px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
             padding: 10px;
+            width: 250px;
+            z-index: 100;
             pointer-events: none;
             opacity: 0;
-            transition: opacity 0.3s;
-            max-width: 300px;
+            transition: opacity 0.2s;
         }
         
-        .control-panel {
-            padding: 10px;
-            background-color: var(--vscode-editor-background);
-            border-top: 1px solid var(--vscode-panel-border);
+        .tooltip-header {
+            font-weight: bold;
+            padding-bottom: 5px;
+            border-bottom: 1px solid #e0e0e0;
+            margin-bottom: 5px;
         }
         
-        button {
-            background-color: var(--vscode-button-background);
-            color: var(--vscode-button-foreground);
+        .tooltip-content {
+            font-size: 0.9rem;
+        }
+        
+        .tooltip-row {
+            display: flex;
+            justify-content: space-between;
+            margin: 3px 0;
+        }
+        
+        .tooltip-label {
+            color: #7f8c8d;
+        }
+        
+        .tooltip-actions {
+            display: flex;
+            gap: 5px;
+            margin-top: 5px;
+            padding-top: 5px;
+            border-top: 1px solid #e0e0e0;
+        }
+        
+        .tooltip-btn {
+            font-size: 0.8rem;
+            padding: 3px 8px;
+            background-color: var(--light-bg);
             border: none;
-            padding: 6px 12px;
+            border-radius: 3px;
             cursor: pointer;
-            border-radius: 2px;
         }
         
-        button:hover {
-            background-color: var(--vscode-button-hoverBackground);
+        .tooltip-btn:hover {
+            background-color: var(--accent-color);
+            color: white;
         }
         
-        select, input {
-            background-color: var(--vscode-input-background);
-            color: var(--vscode-input-foreground);
-            border: 1px solid var(--vscode-input-border);
-            padding: 4px 8px;
-            border-radius: 2px;
-            margin-right: 8px;
+        /* Responsive design */
+        @media (max-width: 768px) {
+            .details-panel {
+                flex-direction: column;
+                height: 300px;
+            }
+            
+            .file-details {
+                width: 100%;
+                height: 50%;
+                border-right: none;
+                border-bottom: 1px solid #bdc3c7;
+            }
+            
+            .references-list {
+                height: 50%;
+            }
         }
     </style>
 </head>
 <body>
-    <div id="toolbar">
-        <div>
-            <button id="zoomIn">+</button>
-            <button id="zoomOut">-</button>
-            <button id="resetZoom">Reset</button>
-            <select id="layoutType">
-                <option value="force">Force Layout</option>
-                <option value="tree">Tree Layout</option>
-                <option value="radial">Radial Layout</option>
-            </select>
+    <div class="toolbar">
+        <div class="toolbar-group">
+            <button class="btn btn-primary" id="network-btn">
+                <i>📊</i> 网络图
+            </button>
+            <button class="btn btn-secondary" id="tree-btn">
+                <i>🌲</i> 树形图
+            </button>
+            <button class="btn btn-secondary" id="matrix-btn">
+                <i>📏</i> 矩阵图
+            </button>
+            <button class="btn btn-secondary" id="heatmap-btn">
+                <i>🔥</i> 热力图
+            </button>
         </div>
-        <div>
-            <input type="text" id="searchFiles" placeholder="Search files..." />
-            <button id="expandAll">Expand All</button>
-            <button id="collapseAll">Collapse All</button>
+        
+        <div class="toolbar-divider"></div>
+        
+        <div class="toolbar-group">
+            <button class="btn-icon" title="按目录分组" id="group-by-dir">
+                <i>📁</i>
+            </button>
+            <button class="btn-icon" title="按文件类型分组" id="group-by-type">
+                <i>📄</i>
+            </button>
+            <button class="btn-icon" title="按引用数量分组" id="group-by-refs">
+                <i>🔢</i>
+            </button>
+        </div>
+        
+        <div class="toolbar-divider"></div>
+        
+        <div class="toolbar-group">
+            <button class="btn-icon" title="搜索" id="search-btn">
+                <i>🔍</i>
+            </button>
+            <button class="btn-icon" title="过滤" id="filter-btn">
+                <i>🔎</i>
+            </button>
+            <button class="btn-icon" title="导出" id="export-btn">
+                <i>📤</i>
+            </button>
+            <button class="btn-icon" title="设置" id="settings-btn">
+                <i>⚙️</i>
+            </button>
         </div>
     </div>
     
-    <div id="container">
-        <div id="graph-container"></div>
-        <div id="tooltip" class="tooltip"></div>
-    </div>
-    
-    <div class="control-panel">
-        <div>
-            <label>
-                <input type="checkbox" id="showDependencies" checked /> Show Dependencies
-            </label>
-            <label>
-                <input type="checkbox" id="showDependents" checked /> Show Dependents
-            </label>
+    <div class="main-container">
+        <div class="visualization-area">
+            <!-- Network Graph View -->
+            <div id="network-view" class="view active">
+                <!-- Nodes and edges will be added dynamically -->
+                <div class="zoom-controls">
+                    <button class="zoom-btn" id="zoom-in">+</button>
+                    <button class="zoom-btn" id="zoom-reset">⟲</button>
+                    <button class="zoom-btn" id="zoom-out">-</button>
+                </div>
+            </div>
+            
+            <!-- Tree View -->
+            <div id="tree-view" class="view">
+                <div class="tree-container" id="tree-container">
+                    <!-- Tree nodes will be added dynamically -->
+                </div>
+            </div>
+            
+            <!-- Matrix View -->
+            <div id="matrix-view" class="view">
+                <div class="matrix-container" id="matrix-container">
+                    <!-- Matrix cells will be added dynamically -->
+                </div>
+            </div>
+            
+            <!-- Heatmap View -->
+            <div id="heatmap-view" class="view">
+                <div class="heatmap-container" id="heatmap-container">
+                    <!-- Heatmap cells will be added dynamically -->
+                </div>
+            </div>
+            
+            <!-- Node Tooltip -->
+            <div class="node-tooltip" id="node-tooltip">
+                <div class="tooltip-header" id="tooltip-header">filename.js</div>
+                <div class="tooltip-content">
+                    <div class="tooltip-row">
+                        <span class="tooltip-label">路径:</span>
+                        <span id="tooltip-path">/src/utils/</span>
+                    </div>
+                    <div class="tooltip-row">
+                        <span class="tooltip-label">引用:</span>
+                        <span id="tooltip-outgoing">12 文件</span>
+                    </div>
+                    <div class="tooltip-row">
+                        <span class="tooltip-label">被引用:</span>
+                        <span id="tooltip-incoming">5 文件</span>
+                    </div>
+                    <div class="tooltip-row">
+                        <span class="tooltip-label">大小:</span>
+                        <span id="tooltip-size">4.2KB</span>
+                    </div>
+                    <div class="tooltip-row">
+                        <span class="tooltip-label">最近修改:</span>
+                        <span id="tooltip-modified">2天前</span>
+                    </div>
+                </div>
+                <div class="tooltip-actions">
+                    <button class="tooltip-btn" id="tooltip-view-file">查看文件</button>
+                    <button class="tooltip-btn" id="tooltip-find-refs">查找所有引用</button>
+                </div>
+            </div>
         </div>
     </div>
-
+    
+    <div class="details-panel">
+        <div class="file-details">
+            <div class="file-details-header">文件详情</div>
+            <div class="file-details-content">
+                <div class="detail-item">
+                    <span class="detail-label">文件:</span>
+                    <span id="detail-filename">-</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">路径:</span>
+                    <span id="detail-path">-</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">大小:</span>
+                    <span id="detail-size">-</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">最后修改:</span>
+                    <span id="detail-modified">-</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">引用:</span>
+                    <span id="detail-outgoing">-</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">被引用:</span>
+                    <span id="detail-incoming">-</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">引用类型:</span>
+                    <span id="detail-ref-types">-</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="references-list">
+            <div class="references-header">引用列表</div>
+            <div class="references-tabs">
+                <div class="references-tab active" id="incoming-tab">被引用 (<span id="incoming-count">0</span>)</div>
+                <div class="references-tab" id="outgoing-tab">引用他人 (<span id="outgoing-count">0</span>)</div>
+            </div>
+            
+            <div id="references-container">
+                <!-- Reference items will be added dynamically -->
+            </div>
+        </div>
+    </div>
+    
     <script>
-        (function() {
-            // This will be replaced with the actual data from the extension
-            const vscode = acquireVsCodeApi();
-            let graphData = null;
-            let simulation = null;
-            let zoom = null;
-            let svg = null;
-
-            // Wait for the message from the extension
+        // Will be implemented in separate JS file
+        const vscode = acquireVsCodeApi();
+        
+        // Store state
+        let graphData = {
+            nodes: [],
+            links: [],
+            tree: null
+        };
+        
+        let selectedNode = null;
+        let currentView = 'network';
+        
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            // Send ready message to extension
+            vscode.postMessage({ type: 'ready' });
+            
+            // Set up view switching
+            document.getElementById('network-btn').addEventListener('click', () => switchView('network'));
+            document.getElementById('tree-btn').addEventListener('click', () => switchView('tree'));
+            document.getElementById('matrix-btn').addEventListener('click', () => switchView('matrix'));
+            document.getElementById('heatmap-btn').addEventListener('click', () => switchView('heatmap'));
+            
+            // Set up tabs
+            document.getElementById('incoming-tab').addEventListener('click', () => switchTab('incoming'));
+            document.getElementById('outgoing-tab').addEventListener('click', () => switchTab('outgoing'));
+            
+            // Listen for messages from the extension
             window.addEventListener('message', event => {
                 const message = event.data;
                 
                 switch (message.type) {
                     case 'update':
                         graphData = message.data;
-                        renderGraph();
+                        renderCurrentView();
                         break;
                 }
             });
-
-            // Signal the extension that the webview is ready
-            vscode.postMessage({ type: 'ready' });
-
-            function renderGraph() {
-                // This is where we'll implement the D3.js visualization
-                // The actual implementation would use D3 to create a force-directed graph
-                console.log('Rendering graph with data:', graphData);
-                
-                // The d3.js implementation would go here...
+        });
+        
+        function switchView(view) {
+            // Hide all views
+            document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
+            
+            // Show selected view
+            document.getElementById(`${view}-view`).classList.add('active');
+            
+            // Update buttons
+            document.querySelectorAll('.toolbar-group:first-child .btn').forEach(btn => {
+                btn.classList.remove('btn-primary');
+                btn.classList.add('btn-secondary');
+            });
+            
+            document.getElementById(`${view}-btn`).classList.remove('btn-secondary');
+            document.getElementById(`${view}-btn`).classList.add('btn-primary');
+            
+            currentView = view;
+            renderCurrentView();
+        }
+        
+        function switchTab(tab) {
+            document.querySelectorAll('.references-tab').forEach(el => el.classList.remove('active'));
+            document.getElementById(`${tab}-tab`).classList.add('active');
+            
+            renderReferences(tab);
+        }
+        
+        function renderCurrentView() {
+            switch (currentView) {
+                case 'network':
+                    renderNetworkView();
+                    break;
+                case 'tree':
+                    renderTreeView();
+                    break;
+                case 'matrix':
+                    renderMatrixView();
+                    break;
+                case 'heatmap':
+                    renderHeatmapView();
+                    break;
+            }
+        }
+        
+        function selectNode(node) {
+            selectedNode = node;
+            updateDetailsPanel();
+            renderReferences('incoming');
+        }
+        
+        function updateDetailsPanel() {
+            if (!selectedNode) return;
+            
+            document.getElementById('detail-filename').textContent = selectedNode.name;
+            document.getElementById('detail-path').textContent = selectedNode.path;
+            document.getElementById('detail-size').textContent = selectedNode.size || 'Unknown';
+            document.getElementById('detail-modified').textContent = selectedNode.lastModified || 'Unknown';
+            document.getElementById('detail-outgoing').textContent = `${selectedNode.outgoingCount || 0} 个文件`;
+            document.getElementById('detail-incoming').textContent = `${selectedNode.incomingCount || 0} 个文件`;
+            
+            document.getElementById('incoming-count').textContent = selectedNode.incomingCount || 0;
+            document.getElementById('outgoing-count').textContent = selectedNode.outgoingCount || 0;
+        }
+        
+        function renderReferences(type) {
+            const container = document.getElementById('references-container');
+            container.innerHTML = '';
+            
+            if (!selectedNode) return;
+            
+            const refs = type === 'incoming' ? selectedNode.incomingRefs : selectedNode.outgoingRefs;
+            
+            if (!refs || refs.length === 0) {
+                container.innerHTML = `<div class="reference-item">没有${type === 'incoming' ? '被引用' : '引用他人'}的文件</div>`;
+                return;
             }
             
-            // Wire up UI controls
-            document.getElementById('zoomIn').addEventListener('click', () => {
-                // Zoom in implementation
+            refs.forEach(ref => {
+                const item = document.createElement('div');
+                item.className = 'reference-item';
+                
+                const icon = document.createElement('span');
+                icon.className = 'reference-icon';
+                icon.textContent = '📄';
+                
+                const name = document.createElement('span');
+                name.textContent = ref.name;
+                
+                const path = document.createElement('span');
+                path.className = 'reference-path';
+                path.textContent = ref.path;
+                
+                item.appendChild(icon);
+                item.appendChild(name);
+                item.appendChild(path);
+                
+                item.addEventListener('click', () => {
+                    vscode.postMessage({
+                        type: 'selectFile',
+                        path: ref.fullPath
+                    });
+                });
+                
+                container.appendChild(item);
             });
-            
-            document.getElementById('zoomOut').addEventListener('click', () => {
-                // Zoom out implementation
-            });
-            
-            document.getElementById('resetZoom').addEventListener('click', () => {
-                // Reset zoom implementation
-            });
-            
-            document.getElementById('layoutType').addEventListener('change', (e) => {
-                // Change layout implementation
-            });
-            
-            document.getElementById('searchFiles').addEventListener('input', (e) => {
-                // Search implementation
-            });
-            
-            document.getElementById('expandAll').addEventListener('click', () => {
-                // Expand all nodes implementation
-            });
-            
-            document.getElementById('collapseAll').addEventListener('click', () => {
-                // Collapse all nodes implementation
-            });
-        })();
+        }
+        
+        // View rendering functions will be implemented in separate JS files
+        function renderNetworkView() {
+            // Placeholder for network view rendering
+            console.log('Rendering network view');
+        }
+        
+        function renderTreeView() {
+            // Placeholder for tree view rendering
+            console.log('Rendering tree view');
+        }
+        
+        function renderMatrixView() {
+            // Placeholder for matrix view rendering
+            console.log('Rendering matrix view');
+        }
+        
+        function renderHeatmapView() {
+            // Placeholder for heatmap view rendering
+            console.log('Rendering heatmap view');
+        }
     </script>
 </body>
 </html>

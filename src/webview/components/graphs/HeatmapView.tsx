@@ -42,7 +42,7 @@ const HeatmapView: React.FC<HeatmapViewProps> = ({ data, selectedNode, onNodeSel
     const nodes = data.nodes;
     
     // 按引用数量排序
-    nodes.sort((a, b) => b.totalReferences - a.totalReferences);
+    nodes.sort((a, b) => (b.incomingCount + b.outgoingCount) - (a.incomingCount + a.outgoingCount));
     
     // 计算热图尺寸
     const chartWidth = width - margin.left - margin.right;
@@ -54,7 +54,7 @@ const HeatmapView: React.FC<HeatmapViewProps> = ({ data, selectedNode, onNodeSel
     
     // 颜色比例尺
     const colorScale = d3.scaleSequential(d3.interpolateYlOrRd)
-      .domain([0, d3.max(nodes, d => d.totalReferences) || 1]);
+      .domain([0, d3.max(nodes, d => d.incomingCount + d.outgoingCount) || 1]);
     
     // 创建 X 轴比例尺
     const xScale = d3.scaleBand()
@@ -72,7 +72,7 @@ const HeatmapView: React.FC<HeatmapViewProps> = ({ data, selectedNode, onNodeSel
       .attr("y", 0)
       .attr("width", xScale.bandwidth())
       .attr("height", cellHeight)
-      .attr("fill", d => colorScale(d.totalReferences))
+      .attr("fill", d => colorScale(d.incomingCount + d.outgoingCount))
       .attr("stroke", "#fff")
       .attr("stroke-width", 1)
       .attr("rx", 2)
@@ -92,10 +92,10 @@ const HeatmapView: React.FC<HeatmapViewProps> = ({ data, selectedNode, onNodeSel
           .html(`
             <div class="p-2">
               <div><strong>File:</strong> ${d.name}</div>
-              <div><strong>Path:</strong> ${d.path}</div>
-              <div><strong>Total References:</strong> ${d.totalReferences}</div>
-              <div><strong>Incoming:</strong> ${d.incomingReferences}</div>
-              <div><strong>Outgoing:</strong> ${d.outgoingReferences}</div>
+              <div><strong>Path:</strong> ${d.fullPath}</div>
+              <div><strong>Total References:</strong> ${d.incomingCount + d.outgoingCount}</div>
+              <div><strong>Incoming:</strong> ${d.incomingCount}</div>
+              <div><strong>Outgoing:</strong> ${d.outgoingCount}</div>
             </div>
           `)
           .style("left", (event.pageX + 10) + "px")
@@ -104,7 +104,10 @@ const HeatmapView: React.FC<HeatmapViewProps> = ({ data, selectedNode, onNodeSel
       .on("mouseout", (event) => {
         d3.select(event.currentTarget)
           .attr("stroke", "#fff")
-          .attr("stroke-width", d => d.id === selectedNode ? 2 : 1);
+          .attr("stroke-width", function() {
+            const d = d3.select(this).datum() as any;
+            return d.id === selectedNode ? 2 : 1;
+          });
         
         tooltip.style("opacity", 0);
       });
@@ -133,8 +136,8 @@ const HeatmapView: React.FC<HeatmapViewProps> = ({ data, selectedNode, onNodeSel
       .attr("text-anchor", "middle")
       .attr("dominant-baseline", "middle")
       .attr("font-size", 10)
-      .attr("fill", d => d3.hsl(colorScale(d.totalReferences)).l > 0.5 ? "#333" : "#fff")
-      .text(d => d.totalReferences);
+      .attr("fill", d => d3.hsl(colorScale(d.incomingCount + d.outgoingCount)).l > 0.5 ? "#333" : "#fff")
+      .text(d => d.incomingCount + d.outgoingCount);
     
     // 添加图例
     const legendWidth = 200;
@@ -144,7 +147,7 @@ const HeatmapView: React.FC<HeatmapViewProps> = ({ data, selectedNode, onNodeSel
     const legendY = -40;
     
     const legendScale = d3.scaleLinear()
-      .domain([0, d3.max(nodes, d => d.totalReferences) || 1])
+      .domain([0, d3.max(nodes, d => d.incomingCount + d.outgoingCount) || 1])
       .range([0, legendWidth]);
     
     const legendAxis = d3.axisBottom(legendScale)
@@ -159,7 +162,7 @@ const HeatmapView: React.FC<HeatmapViewProps> = ({ data, selectedNode, onNodeSel
     linearGradient.selectAll("stop")
       .data([
         { offset: "0%", color: colorScale(0) },
-        { offset: "100%", color: colorScale(d3.max(nodes, d => d.totalReferences) || 1) }
+        { offset: "100%", color: colorScale(d3.max(nodes, d => d.incomingCount + d.outgoingCount) || 1) }
       ])
       .enter()
       .append("stop")

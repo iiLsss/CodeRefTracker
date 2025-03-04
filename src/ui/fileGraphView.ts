@@ -23,7 +23,7 @@ export class FileGraphView {
 			message => {
 				switch (message.type) {
 					case 'ready':
-						this._logger.log('WebView is ready');
+						this._logger.info('WebView is ready');
 						break;
 					case 'selectFile':
 						vscode.workspace

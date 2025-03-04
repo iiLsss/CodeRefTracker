@@ -2,189 +2,214 @@ import React, { useEffect, useRef } from 'react';
 import * as d3 from 'd3';
 import { GraphData } from '../../types';
 
+// 矩阵视图属性
 interface MatrixViewProps {
   data: GraphData;
   selectedNode: string | null;
   onNodeSelect: (nodeId: string) => void;
 }
 
+// 矩阵视图组件
 const MatrixView: React.FC<MatrixViewProps> = ({ data, selectedNode, onNodeSelect }) => {
+  // 引用 SVG 元素
   const svgRef = useRef<SVGSVGElement>(null);
   
+  // 渲染图表
   useEffect(() => {
-    if (!data || !svgRef.current) {return;}
+    if (!svgRef.current || !data || data.nodes.length === 0) {
+      return;
+    }
     
-    const svg = d3.select(svgRef.current);
-    const width = svgRef.current.clientWidth;
-    const height = svgRef.current.clientHeight;
-    const padding = 100; // 为标签留出空间
+    // 清除现有内容
+    d3.select(svgRef.current).selectAll('*').remove();
     
-    // 清除之前的图形
-    svg.selectAll("*").remove();
+    // 获取容器尺寸
+    const container = svgRef.current.parentElement;
+    if (!container) {return;}
+    
+    const width = container.clientWidth;
+    const height = container.clientHeight;
+    
+    // 创建 SVG
+    const svg = d3.select(svgRef.current)
+      .attr('width', width)
+      .attr('height', height)
+      .attr('viewBox', [0, 0, width, height]);
     
     // 创建缩放行为
     const zoom = d3.zoom()
-      .scaleExtent([0.5, 4])
-      .on("zoom", (event) => {
-        g.attr("transform", event.transform);
+      .scaleExtent([0.1, 4])
+      .on('zoom', (event) => {
+        g.attr('transform', event.transform);
       });
     
     svg.call(zoom as any);
     
     // 创建主容器
-    const g = svg.append("g")
-      .attr("transform", `translate(${padding}, ${padding})`);
+    const g = svg.append('g')
+      .attr('transform', `translate(50, 50)`);
     
-    // 重置缩放
-    svg.call(zoom.transform as any, d3.zoomIdentity.translate(padding, padding));
+    // 限制节点数量，避免矩阵过大
+    const maxNodes = 50;
+    let nodes = [...data.nodes];
     
-    // 准备数据
-    const nodes = data.nodes;
-    const n = nodes.length;
+    // 如果有选中节点，确保它在列表中
+    if (selectedNode) {
+      const selectedNodeIndex = nodes.findIndex(n => n.id === selectedNode);
+      if (selectedNodeIndex !== -1) {
+        // 将选中节点移到前面
+        const selectedNodeData = nodes[selectedNodeIndex];
+        nodes.splice(selectedNodeIndex, 1);
+        nodes.unshift(selectedNodeData);
+      }
+    }
+    
+    // 按引用数量排序并限制数量
+    nodes = nodes
+      .sort((a, b) => (b.incomingCount + b.outgoingCount) - (a.incomingCount + a.outgoingCount))
+      .slice(0, maxNodes);
     
     // 创建邻接矩阵
-    const matrix: number[][] = Array(n).fill(0).map(() => Array(n).fill(0));
+    const matrix: number[][] = [];
+    const nodeIds = nodes.map(n => n.id);
     
-    // 节点索引映射
-    const nodeIndex = new Map<string, number>();
-    nodes.forEach((node, i) => {
-      nodeIndex.set(node.id, i);
-    });
+    // 初始化矩阵
+    for (let i = 0; i < nodes.length; i++) {
+      matrix[i] = [];
+      for (let j = 0; j < nodes.length; j++) {
+        matrix[i][j] = 0;
+      }
+    }
     
     // 填充矩阵
     data.links.forEach(link => {
-      const sourceIndex = nodeIndex.get(link.source);
-      const targetIndex = nodeIndex.get(link.target);
-      if (sourceIndex !== undefined && targetIndex !== undefined) {
-        matrix[sourceIndex][targetIndex] = link.weight || 1;
+      const sourceIndex = nodeIds.indexOf(link.source);
+      const targetIndex = nodeIds.indexOf(link.target);
+      
+      if (sourceIndex !== -1 && targetIndex !== -1) {
+        matrix[sourceIndex][targetIndex] = 1;
       }
     });
     
-    // 计算矩阵尺寸
-    const size = Math.min(width, height) - 2 * padding;
-    const cellSize = size / n;
+    // 计算单元格大小
+    const cellSize = Math.min(
+      (width - 100) / nodes.length,
+      (height - 100) / nodes.length
+    );
     
-    // 颜色比例尺
-    const color = d3.scaleLinear<string>()
-      .domain([0, d3.max(matrix.flat()) || 1])
-      .range(["#f7fbff", "#08519c"]);
+    // 创建颜色比例尺
+    const color = d3.scaleSequential()
+      .interpolator(d3.interpolateBlues)
+      .domain([0, 1]);
     
-    // 绘制单元格
-    const cells = g.selectAll(".cell")
-      .data(matrix.flatMap((row, i) => 
-        row.map((value, j) => ({ row: i, col: j, value }))
+    // 创建矩阵单元格
+    g.selectAll('rect')
+      .data(nodes.flatMap((source, i) => 
+        nodes.map((target, j) => ({
+          sourceId: source.id,
+          targetId: target.id,
+          sourceName: source.name,
+          targetName: target.name,
+          x: j,
+          y: i,
+          value: matrix[i][j]
+        }))
       ))
-      .enter()
-      .append("rect")
-      .attr("class", "cell")
-      .attr("x", d => d.col * cellSize)
-      .attr("y", d => d.row * cellSize)
-      .attr("width", cellSize)
-      .attr("height", cellSize)
-      .attr("fill", d => d.value > 0 ? color(d.value) : "#f5f5f5")
-      .attr("stroke", "#fff")
-      .attr("stroke-width", 0.5)
-      .on("click", (event, d: any) => {
-        const nodeId = nodes[d.row].id;
-        onNodeSelect(nodeId);
+      .join('rect')
+      .attr('x', d => d.x * cellSize)
+      .attr('y', d => d.y * cellSize)
+      .attr('width', cellSize - 1)
+      .attr('height', cellSize - 1)
+      .attr('fill', (d: { sourceId: string; targetId: string; sourceName: string; targetName: string; x: number; y: number; value: number; }) => {
+        if (d.sourceId === selectedNode || d.targetId === selectedNode) {
+          return '#ff7f0e'; // 高亮选中节点的连接
+        }
+        return d.value ? color(d.value) as string : color(0) as string;
       })
-      .on("mouseover", (event, d: any) => {
-        // 高亮行和列
-        cells
-          .attr("opacity", (cell: any) => 
-            cell.row === d.row || cell.col === d.col ? 1 : 0.3
-          );
-        
-        // 显示工具提示
-        const sourceNode = nodes[d.row];
-        const targetNode = nodes[d.col];
-        
-        tooltip
-          .style("opacity", 1)
-          .html(`
-            <div class="p-2">
-              <div><strong>From:</strong> ${sourceNode.name}</div>
-              <div><strong>To:</strong> ${targetNode.name}</div>
-              <div><strong>References:</strong> ${d.value}</div>
-            </div>
-          `)
-          .style("left", (event.pageX + 10) + "px")
-          .style("top", (event.pageY - 28) + "px");
+      .attr('stroke', d => 
+        (d.sourceId === selectedNode || d.targetId === selectedNode) ? '#fa5252' : '#dee2e6'
+      )
+      .on('click', (event, d) => {
+        // 点击单元格时选择源节点
+        onNodeSelect(d.sourceId);
       })
-      .on("mouseout", () => {
-        cells.attr("opacity", 1);
-        tooltip.style("opacity", 0);
-      });
+      .append('title')
+      .text(d => `${d.sourceName} → ${d.targetName}: ${d.value ? 'Referenced' : 'Not Referenced'}`);
     
     // 添加行标签
-    g.selectAll(".row-label")
+    g.selectAll('.row-label')
       .data(nodes)
-      .enter()
-      .append("text")
-      .attr("class", "row-label")
-      .attr("x", -5)
-      .attr("y", (d, i) => i * cellSize + cellSize / 2)
-      .attr("text-anchor", "end")
-      .attr("dominant-baseline", "middle")
-      .attr("font-size", 10)
-      .text(d => d.name.length > 15 ? d.name.substring(0, 15) + "..." : d.name)
-      .on("click", (event, d) => {
+      .join('text')
+      .attr('class', 'row-label')
+      .attr('x', -5)
+      .attr('y', (d, i) => i * cellSize + cellSize / 2)
+      .attr('text-anchor', 'end')
+      .attr('dominant-baseline', 'middle')
+      .attr('font-size', '10px')
+      .text(d => d.name)
+      .style('font-weight', d => d.id === selectedNode ? 'bold' : 'normal')
+      .style('fill', d => d.id === selectedNode ? '#fa5252' : '#495057')
+      .on('click', (event, d) => {
         onNodeSelect(d.id);
       });
     
     // 添加列标签
-    g.selectAll(".col-label")
+    g.selectAll('.column-label')
       .data(nodes)
-      .enter()
-      .append("text")
-      .attr("class", "col-label")
-      .attr("x", (d, i) => i * cellSize + cellSize / 2)
-      .attr("y", -5)
-      .attr("text-anchor", "start")
-      .attr("dominant-baseline", "middle")
-      .attr("transform", (d, i) => `rotate(-45, ${i * cellSize + cellSize / 2}, -5)`)
-      .attr("font-size", 10)
-      .text(d => d.name.length > 15 ? d.name.substring(0, 15) + "..." : d.name)
-      .on("click", (event, d) => {
+      .join('text')
+      .attr('class', 'column-label')
+      .attr('x', (d, i) => i * cellSize + cellSize / 2)
+      .attr('y', -5)
+      .attr('text-anchor', 'start')
+      .attr('transform', (d, i) => `rotate(-45, ${i * cellSize + cellSize / 2}, -5)`)
+      .attr('font-size', '10px')
+      .text(d => d.name)
+      .style('font-weight', d => d.id === selectedNode ? 'bold' : 'normal')
+      .style('fill', d => d.id === selectedNode ? '#fa5252' : '#495057')
+      .on('click', (event, d) => {
         onNodeSelect(d.id);
       });
     
-    // 高亮选中的节点
-    if (selectedNode) {
-      const index = nodeIndex.get(selectedNode);
-      if (index !== undefined) {
-        // 高亮行和列
-        cells
-          .attr("stroke", (d: any) => 
-            d.row === index || d.col === index ? "#ff6b6b" : "#fff"
-          )
-          .attr("stroke-width", (d: any) => 
-            d.row === index || d.col === index ? 2 : 0.5
-          );
-      }
-    }
+    // 添加图例
+    const legend = svg.append('g')
+      .attr('transform', `translate(${width - 120}, 20)`);
     
-    // 添加工具提示
-    const tooltip = d3.select("body").append("div")
-      .attr("class", "tooltip")
-      .style("opacity", 0)
-      .style("position", "absolute")
-      .style("background-color", "white")
-      .style("border", "1px solid #ddd")
-      .style("border-radius", "4px")
-      .style("padding", "5px")
-      .style("pointer-events", "none")
-      .style("font-size", "12px")
-      .style("z-index", 1000);
+    legend.append('rect')
+      .attr('width', 15)
+      .attr('height', 15)
+      .attr('fill', color(0) as string);
     
-    return () => {
-      tooltip.remove();
-    };
+    legend.append('text')
+      .attr('x', 20)
+      .attr('y', 12)
+      .attr('font-size', '12px')
+      .text('No Reference');
+    
+    legend.append('rect')
+      .attr('width', 15)
+      .attr('height', 15)
+      .attr('y', 20)
+      .attr('fill', color(1));
+    
+    legend.append('text')
+      .attr('x', 20)
+      .attr('y', 32)
+      .attr('font-size', '12px')
+      .text('Has Reference');
+    
+    // 添加标题
+    svg.append('text')
+      .attr('x', width / 2)
+      .attr('y', 20)
+      .attr('text-anchor', 'middle')
+      .attr('font-size', '16px')
+      .attr('font-weight', 'bold')
+      .text('Dependency Matrix');
   }, [data, selectedNode, onNodeSelect]);
   
   return (
     <div className="w-full h-full">
-      <svg ref={svgRef} className="w-full h-full" />
+      <svg ref={svgRef} className="w-full h-full"></svg>
     </div>
   );
 };

@@ -1,17 +1,26 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
-import './styles/index.css';
+import './index.css';
 
-// 确保 DOM 已加载
-document.addEventListener('DOMContentLoaded', () => {
-  const rootElement = document.getElementById('root');
-  if (rootElement) {
-    const root = ReactDOM.createRoot(rootElement);
-    root.render(
-      <React.StrictMode>
-        <App />
-      </React.StrictMode>
-    );
+// 获取 VSCode API
+declare global {
+  interface Window {
+    acquireVsCodeApi: () => {
+      postMessage: (message: any) => void;
+      getState: () => any;
+      setState: (state: any) => void;
+    };
   }
-}); 
+}
+
+// 获取 VSCode API
+const vscode = window.acquireVsCodeApi();
+
+// 渲染应用
+const root = ReactDOM.createRoot(document.getElementById('root') as HTMLElement);
+root.render(
+  <React.StrictMode>
+    <App vscode={vscode} />
+  </React.StrictMode>
+); 

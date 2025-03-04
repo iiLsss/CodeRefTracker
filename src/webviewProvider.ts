@@ -5,33 +5,37 @@ import { ReferenceAnalyzer } from './referenceAnalyzer';
 import { Logger } from './logger';
 
 /**
- * 管理代码引用可视化的 WebView
+ * Webview 提供者
  */
-export class CodeReferencesWebviewProvider implements vscode.WebviewViewProvider {
+export class WebviewProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'codeRefTracker.graphView';
   
   private _view?: vscode.WebviewView;
   private _extensionUri: vscode.Uri;
-  private _referenceAnalyzer: ReferenceAnalyzer;
   private _logger: Logger;
+  private _referenceAnalyzer: ReferenceAnalyzer;
   
   constructor(
     extensionUri: vscode.Uri,
-    referenceAnalyzer: ReferenceAnalyzer,
-    logger: Logger
+    logger: Logger,
+    referenceAnalyzer: ReferenceAnalyzer
   ) {
     this._extensionUri = extensionUri;
-    this._referenceAnalyzer = referenceAnalyzer;
     this._logger = logger;
+    this._referenceAnalyzer = referenceAnalyzer;
   }
   
+  /**
+   * 解析 Webview 视图
+   */
   public resolveWebviewView(
     webviewView: vscode.WebviewView,
     context: vscode.WebviewViewResolveContext,
-    token: vscode.CancellationToken
-  ): void | Thenable<void> {
+    _token: vscode.CancellationToken
+  ) {
     this._view = webviewView;
     
+    // 设置 Webview 选项
     webviewView.webview.options = {
       enableScripts: true,
       localResourceRoots: [
@@ -39,193 +43,226 @@ export class CodeReferencesWebviewProvider implements vscode.WebviewViewProvider
       ]
     };
     
+    // 设置 HTML 内容
     webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
     
-    // 处理来自 webview 的消息
-    webviewView.webview.onDidReceiveMessage(async (message) => {
-      switch (message.type) {
-        case 'requestData':
-          await this._sendGraphData();
-          break;
-        case 'refreshData':
-          await this._referenceAnalyzer.analyzeWorkspace();
-          await this._sendGraphData();
-          break;
-        case 'openFile':
-          if (message.path) {
-            try {
-              const document = await vscode.workspace.openTextDocument(message.path);
-              await vscode.window.showTextDocument(document);
-            } catch (error) {
-              this._logger.error(`Failed to open file: ${message.path}`, error);
-            }
-          }
-          break;
-        case 'nodeSelected':
-          // 处理节点选择
-          break;
-        case 'exportData':
-          this._exportData();
-          break;
-      }
-    });
+    // 处理消息
+    this._setWebviewMessageListener(webviewView.webview);
   }
   
   /**
-   * 发送图数据到 webview
+   * 发送图表数据
    */
-  private async _sendGraphData(): Promise<void> {
-    if (!this._view) {return;}
-    
-    try {
-      const graphData = await this._prepareGraphData();
+  public sendGraphData(data: any): void {
+    if (this._view) {
       this._view.webview.postMessage({
         type: 'graphData',
-        data: graphData
+        data
       });
-    } catch (error) {
-      this._logger.error('Failed to send graph data', error);
-      vscode.window.showErrorMessage('Failed to prepare graph data');
     }
   }
   
   /**
-   * 准备图数据
-   */
-  private async _prepareGraphData() {
-    const references = this._referenceAnalyzer.getReferences();
-    const files = this._referenceAnalyzer.getFiles();
-    
-    // 创建节点
-    const nodes = Object.keys(files).map(filePath => {
-      const file = files[filePath];
-      const incomingCount = (references[filePath]?.incomingReferences || []).length;
-      const outgoingCount = (references[filePath]?.outgoingReferences || []).length;
-      const totalCount = incomingCount + outgoingCount;
-      
-      // 确定引用类别
-      let category: 'high' | 'medium' | 'low' = 'low';
-      if (totalCount > 10) {
-        category = 'high';
-      } else if (totalCount > 5) {
-        category = 'medium';
-      }
-      
-      return {
-        id: filePath,
-        path: filePath,
-        name: path.basename(filePath),
-        type: path.extname(filePath).substring(1),
-        incomingReferences: incomingCount,
-        outgoingReferences: outgoingCount,
-        totalReferences: totalCount,
-        referenceCategory: category
-      };
-    });
-    
-    // 创建连接
-    const links: any[] = [];
-    
-    Object.keys(references).forEach(filePath => {
-      const fileRefs = references[filePath];
-      
-      // 添加传出引用
-      fileRefs.outgoingReferences.forEach(targetPath => {
-        links.push({
-          source: filePath,
-          target: targetPath,
-          type: 'outgoing',
-          weight: 1
-        });
-      });
-      
-      // 添加传入引用
-      fileRefs.incomingReferences.forEach(sourcePath => {
-        // 避免重复添加
-        const existingLink = links.find(
-          link => link.source === sourcePath && link.target === filePath
-        );
-        
-        if (!existingLink) {
-          links.push({
-            source: sourcePath,
-            target: filePath,
-            type: 'incoming',
-            weight: 1
-          });
-        }
-      });
-    });
-    
-    // 计算统计信息
-    const totalFiles = nodes.length;
-    const totalReferences = links.length;
-    const refCounts = nodes.map(n => n.totalReferences);
-    const maxReferences = Math.max(...refCounts);
-    const minReferences = Math.min(...refCounts);
-    const avgReferences = refCounts.reduce((sum, count) => sum + count, 0) / totalFiles;
-    
-    return {
-      nodes,
-      links,
-      stats: {
-        totalFiles,
-        totalReferences,
-        maxReferences,
-        minReferences,
-        avgReferences
-      }
-    };
-  }
-  
-  /**
-   * 导出数据
-   */
-  private async _exportData(): Promise<void> {
-    try {
-      const graphData = await this._prepareGraphData();
-      
-      // 显示保存对话框
-      const uri = await vscode.window.showSaveDialog({
-        defaultUri: vscode.Uri.file('code-references-data.json'),
-        filters: {
-          'JSON Files': ['json']
-        }
-      });
-      
-      if (uri) {
-        fs.writeFileSync(uri.fsPath, JSON.stringify(graphData, null, 2));
-        vscode.window.showInformationMessage(`Data exported to ${uri.fsPath}`);
-      }
-    } catch (error) {
-      this._logger.error('Failed to export data', error);
-      vscode.window.showErrorMessage('Failed to export data');
-    }
-  }
-  
-  /**
-   * 获取 webview 的 HTML 内容
+   * 获取 Webview 的 HTML 内容
    */
   private _getHtmlForWebview(webview: vscode.Webview): string {
-    // 获取 bundle 文件路径
-    const bundlePath = webview.asWebviewUri(
+    // 获取资源路径
+    const scriptUri = webview.asWebviewUri(
       vscode.Uri.joinPath(this._extensionUri, 'out', 'webview', 'bundle.js')
     );
     
-    // 读取 HTML 模板
-    const templatePath = vscode.Uri.joinPath(this._extensionUri, 'src', 'webview', 'template.html');
-    let html = fs.readFileSync(templatePath.fsPath, 'utf8');
+    // 使用 nonce 提高安全性
+    const nonce = this._getNonce();
     
-    // 替换占位符
-    html = html.replace('{{bundlePath}}', bundlePath.toString());
-    
-    return html;
+    return `<!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; img-src ${webview.cspSource} data:;">
+      <title>Code Reference Tracker</title>
+    </head>
+    <body>
+      <div id="root"></div>
+      <script nonce="${nonce}" src="${scriptUri}"></script>
+    </body>
+    </html>`;
   }
   
   /**
-   * 更新 webview
+   * 设置 Webview 消息监听器
    */
-  public async update(): Promise<void> {
-    await this._sendGraphData();
+  private _setWebviewMessageListener(webview: vscode.Webview) {
+    webview.onDidReceiveMessage(
+      async (message) => {
+        switch (message.type) {
+          case 'getGraphData':
+            // 获取图表数据
+            const graphData = this._prepareGraphData();
+            this.sendGraphData(graphData);
+            break;
+            
+          case 'openFile':
+            // 打开文件
+            if (message.filePath) {
+              const uri = vscode.Uri.file(message.filePath);
+              vscode.window.showTextDocument(uri);
+            }
+            break;
+            
+          case 'exportData':
+            // 导出数据
+            if (message.format === 'json') {
+              this._exportDataAsJson();
+            } else if (message.format === 'csv') {
+              this._exportDataAsCsv();
+            }
+            break;
+            
+          case 'refreshData':
+            // 刷新数据
+            await this._refreshData();
+            const refreshedData = this._prepareGraphData();
+            this.sendGraphData(refreshedData);
+            break;
+        }
+      },
+      undefined,
+      []
+    );
+  }
+  
+  /**
+   * 准备图表数据
+   */
+  private _prepareGraphData(): any {
+    try {
+      const references = this._referenceAnalyzer.getReferences();
+      const files = this._referenceAnalyzer.getFiles();
+      
+      // 创建节点
+      const nodes = Object.keys(references).map(filePath => {
+        const file = files[filePath];
+        const fileName = path.basename(filePath);
+        const incomingCount = references[filePath].incomingReferences.length;
+        const outgoingCount = references[filePath].outgoingReferences.length;
+        
+        return {
+          id: filePath,
+          name: fileName,
+          fullPath: filePath,
+          incomingCount,
+          outgoingCount,
+          lastModified: file?.lastModified
+        };
+      });
+      
+      // 创建边
+      const links: Array<{ source: string; target: string }> = [];
+      
+      for (const [filePath, fileRef] of Object.entries(references)) {
+        for (const outgoing of fileRef.outgoingReferences) {
+          links.push({
+            source: filePath,
+            target: outgoing
+          });
+        }
+      }
+      
+      return {
+        nodes,
+        links
+      };
+    } catch (error) {
+      this._logger.error(`Error preparing graph data: ${error}`);
+      return { nodes: [], links: [] };
+    }
+  }
+  
+  /**
+   * 刷新数据
+   */
+  private async _refreshData(): Promise<void> {
+    try {
+      await this._referenceAnalyzer.analyzeWorkspace();
+      this._logger.info('Reference data refreshed');
+    } catch (error) {
+      this._logger.error(`Error refreshing data: ${error}`);
+    }
+  }
+  
+  /**
+   * 导出数据为 JSON
+   */
+  private _exportDataAsJson(): void {
+    try {
+      const data = this._prepareGraphData();
+      
+      // 显示保存对话框
+      vscode.window.showSaveDialog({
+        defaultUri: vscode.Uri.file('code-references.json'),
+        filters: {
+          'JSON Files': ['json']
+        }
+      }).then(uri => {
+        if (uri) {
+          // 写入文件
+          fs.writeFileSync(uri.fsPath, JSON.stringify(data, null, 2));
+          vscode.window.showInformationMessage(`Data exported to ${uri.fsPath}`);
+        }
+      });
+    } catch (error) {
+      this._logger.error(`Error exporting data as JSON: ${error}`);
+      vscode.window.showErrorMessage('Failed to export data as JSON');
+    }
+  }
+  
+  /**
+   * 导出数据为 CSV
+   */
+  private _exportDataAsCsv(): void {
+    try {
+      const references = this._referenceAnalyzer.getReferences();
+      
+      // 创建 CSV 内容
+      let csvContent = 'File,Incoming References,Outgoing References\n';
+      
+      for (const [filePath, fileRef] of Object.entries(references)) {
+        const fileName = path.basename(filePath);
+        const incomingCount = fileRef.incomingReferences.length;
+        const outgoingCount = fileRef.outgoingReferences.length;
+        
+        csvContent += `"${fileName}",${incomingCount},${outgoingCount}\n`;
+      }
+      
+      // 显示保存对话框
+      vscode.window.showSaveDialog({
+        defaultUri: vscode.Uri.file('code-references.csv'),
+        filters: {
+          'CSV Files': ['csv']
+        }
+      }).then(uri => {
+        if (uri) {
+          // 写入文件
+          fs.writeFileSync(uri.fsPath, csvContent);
+          vscode.window.showInformationMessage(`Data exported to ${uri.fsPath}`);
+        }
+      });
+    } catch (error) {
+      this._logger.error(`Error exporting data as CSV: ${error}`);
+      vscode.window.showErrorMessage('Failed to export data as CSV');
+    }
+  }
+  
+  /**
+   * 生成随机 nonce
+   */
+  private _getNonce(): string {
+    let text = '';
+    const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    for (let i = 0; i < 32; i++) {
+      text += possible.charAt(Math.floor(Math.random() * possible.length));
+    }
+    return text;
   }
 } 

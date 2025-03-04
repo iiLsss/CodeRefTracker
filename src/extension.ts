@@ -1,97 +1,87 @@
 import * as vscode from 'vscode';
-import { Logger } from './logger';
+import { Logger, LogLevel } from './logger';
 import { ReferenceAnalyzer } from './referenceAnalyzer';
 import { FileReferenceTreeProvider } from './fileReferenceTreeProvider';
+import { WebviewProvider } from './webviewProvider';
 import { registerCommands } from './commands';
-import { CodeReferencesWebviewProvider } from './webviewProvider';
 
-export async function activate(context: vscode.ExtensionContext) {
-	// Initialize logger
-	const logger = new Logger('CodeRefTracker');
-	logger.info('Activating Code Reference Tracker extension');
-
-	try {
-		// Initialize reference analyzer
-		const referenceAnalyzer = new ReferenceAnalyzer(logger);
-		
-		// Initialize file tree provider
-		const fileTreeProvider = new FileReferenceTreeProvider(referenceAnalyzer, logger);
-		
-		// Register tree view
-		const treeView = vscode.window.createTreeView('codeRefTrackerExplorer', {
-			treeDataProvider: fileTreeProvider,
-			showCollapseAll: true
-		});
-		
-		// Register WebView provider
-		const webviewProvider = new CodeReferencesWebviewProvider(
-			context.extensionUri,
-			referenceAnalyzer,
-			logger
-		);
-		
-		// Register WebView view
-		const webviewView = vscode.window.registerWebviewViewProvider(
-			CodeReferencesWebviewProvider.viewType,
+// 激活扩展
+export function activate(context: vscode.ExtensionContext) {
+	// 创建日志记录器
+	const logger = new Logger('CodeRefTracker', LogLevel.INFO);
+	logger.info('Activating CodeRefTracker extension');
+	
+	// 创建引用分析器
+	const referenceAnalyzer = new ReferenceAnalyzer(logger);
+	
+	// 创建文件引用树提供者
+	const treeProvider = new FileReferenceTreeProvider(referenceAnalyzer);
+	
+	// 注册树视图
+	const treeView = vscode.window.createTreeView('codeReferencesExplorer', {
+		treeDataProvider: treeProvider,
+		showCollapseAll: true
+	});
+	
+	// 创建 Webview 提供者
+	const webviewProvider = new WebviewProvider(
+		context.extensionUri,
+		logger,
+		referenceAnalyzer
+	);
+	
+	// 注册 Webview 视图
+	context.subscriptions.push(
+		vscode.window.registerWebviewViewProvider(
+			WebviewProvider.viewType,
 			webviewProvider
-		);
-		
-		// Register commands
-		registerCommands(context, referenceAnalyzer, fileTreeProvider, webviewProvider, logger);
-		
-		// Initial analysis
-		vscode.window.withProgress({
-			location: vscode.ProgressLocation.Notification,
-			title: 'Analyzing code references...',
-			cancellable: false
-		}, async (progress) => {
-			progress.report({ increment: 0 });
-			await referenceAnalyzer.analyzeWorkspace();
-			fileTreeProvider.refresh();
-			webviewProvider.update();
-			progress.report({ increment: 100 });
-		});
-		
-		// Watch for file changes
-		const fileWatcher = vscode.workspace.createFileSystemWatcher('**/*.{js,jsx,ts,tsx,vue,html,css,scss,less}');
-		
-		// File created
-		fileWatcher.onDidCreate(async (uri) => {
-			await referenceAnalyzer.analyzeFile(uri.fsPath);
-			fileTreeProvider.refresh();
-			webviewProvider.update();
-		});
-		
-		// File changed
-		fileWatcher.onDidChange(async (uri) => {
-			await referenceAnalyzer.analyzeFile(uri.fsPath);
-			fileTreeProvider.refresh();
-			webviewProvider.update();
-		});
-		
-		// File deleted
-		fileWatcher.onDidDelete((uri) => {
-			referenceAnalyzer.removeFile(uri.fsPath);
-			fileTreeProvider.refresh();
-			webviewProvider.update();
-		});
-		
-		// Add to subscriptions
-		context.subscriptions.push(
-			treeView,
-			webviewView,
-			fileWatcher
-		);
-		
-		logger.info('Code Reference Tracker extension activated successfully');
-	} catch (error) {
-		logger.error('Failed to activate extension', error);
-		vscode.window.showErrorMessage('Failed to activate Code Reference Tracker extension');
-	}
+		)
+	);
+	
+	// 注册命令
+	registerCommands(
+		context,
+		logger,
+		referenceAnalyzer,
+		treeProvider,
+		webviewProvider
+	);
+	
+	// 监听文件变化
+	const fileWatcher = vscode.workspace.createFileSystemWatcher('**/*.{ts,tsx,js,jsx,vue,css,scss,less,html}');
+	
+	// 文件创建
+	fileWatcher.onDidCreate(async (uri) => {
+		logger.debug(`File created: ${uri.fsPath}`);
+		await referenceAnalyzer.analyzeFile(uri.fsPath);
+		treeProvider.refresh();
+	});
+	
+	// 文件修改
+	fileWatcher.onDidChange(async (uri) => {
+		logger.debug(`File changed: ${uri.fsPath}`);
+		await referenceAnalyzer.analyzeFile(uri.fsPath);
+		treeProvider.refresh();
+	});
+	
+	// 文件删除
+	fileWatcher.onDidDelete((uri) => {
+		logger.debug(`File deleted: ${uri.fsPath}`);
+		referenceAnalyzer.removeFile(uri.fsPath);
+		treeProvider.refresh();
+	});
+	
+	// 添加到订阅
+	context.subscriptions.push(fileWatcher);
+	context.subscriptions.push(treeView);
+	
+	// 初始分析
+	vscode.commands.executeCommand('codeRefTracker.refreshReferences');
+	
+	logger.info('CodeRefTracker extension activated');
 }
 
-// This method is called when your extension is deactivated
+// 停用扩展
 export function deactivate() {
-	// Clean up resources
-	console.log('===>');
+	// 清理资源
 }

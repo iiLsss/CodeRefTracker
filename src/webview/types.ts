@@ -21,16 +21,26 @@ export interface Link {
   weight: number;
 }
 
-// 图数据类型
+// 图表数据类型
 export interface GraphData {
-  nodes: Node[];
-  links: Link[];
+  nodes: Array<{
+    id: string;
+    name: string;
+    fullPath: string;
+    incomingCount: number;
+    outgoingCount: number;
+    lastModified?: number;
+  }>;
+  links: Array<{
+    source: string;
+    target: string;
+  }>;
   stats: {
     totalFiles: number;
     totalReferences: number;
-    maxReferences: number;
-    minReferences: number;
-    avgReferences: number;
+    maxIncomingReferences: number;
+    maxOutgoingReferences: number;
+    averageReferences: number;
   };
 }
 

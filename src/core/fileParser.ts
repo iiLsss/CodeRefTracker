@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import * as glob from 'glob';
+import glob from 'glob';
 
 export interface FileReference {
 	filePath: string
@@ -16,11 +16,11 @@ export class FileParser {
 
 	public parseFiles(): Promise<FileReference[]> {
 		return new Promise((resolve, reject) => {
-			glob('**/*.{ts,js}', { cwd: this.workspaceDir }, (err, files) => {
+			glob('**/*.{ts,js}', { cwd: this.workspaceDir }, (err: Error | null, files: string[]) => {
 				if (err) {
 					reject(err);
 				} else {
-					const references: FileReference[] = files.map(file => {
+					const references: FileReference[] = files.map((file: string) => {
 						const content = fs.readFileSync(path.join(this.workspaceDir, file), 'utf-8');
 						const referenceCount = this.countReferences(content);
 						return { filePath: file, referenceCount };

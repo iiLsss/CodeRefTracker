@@ -1,71 +1,68 @@
-# codereftracker README
+# Code Reference Tracker
 
-This is the README for your extension "codereftracker". After writing up a brief description, we recommend including the following sections.
+VSCode 扩展，用于分析和可视化代码引用关系。
 
-## Features
+## 功能
 
-Describe specific features of your extension including screenshots of your extension in action. Image paths are relative to this README file.
+- **代码引用分析**：分析工作区中的文件引用关系
+- **文件树视图**：在文件树中显示引用计数
+- **可视化图表**：提供多种可视化方式查看代码引用关系
+  - 网络图：显示文件之间的引用关系
+  - 树形图：以树形结构显示引用关系
+  - 矩阵视图：以矩阵形式显示引用关系
+  - 热图：以热图形式显示引用热度
 
-For example if there is an image subfolder under your extension project workspace:
+## 使用方法
 
-\!\[feature X\]\(images/feature-x.png\)
+1. 安装扩展后，在 VSCode 侧边栏中会出现 "Code References" 视图
+2. 点击 "Refresh" 按钮分析当前工作区的代码引用
+3. 在文件树中查看每个文件的引用计数
+4. 点击 "Show Graph" 按钮打开可视化视图
+5. 在可视化视图中选择不同的视图模式查看代码引用关系
 
-> Tip: Many popular extensions utilize animations. This is an excellent way to show off your extension! We recommend short, focused animations that are easy to follow.
+## 命令
 
-## Requirements
+- `CodeRefTracker: Refresh References` - 刷新代码引用分析
+- `CodeRefTracker: Show Graph` - 显示代码引用图表
+- `CodeRefTracker: Find References` - 查找文件的引用关系
 
-If you have any requirements or dependencies, add a section describing those and how to install and configure them.
+## 技术栈
 
-## Extension Settings
+- TypeScript
+- VSCode API
+- React
+- Tailwind CSS
+- D3.js
 
-Include if your extension adds any VS Code settings through the `contributes.configuration` extension point.
+## 开发
 
-For example:
+### 前提条件
 
-This extension contributes the following settings:
+- Node.js 14+
+- npm 或 yarn
 
-* `myExtension.enable`: Enable/disable this extension.
-* `myExtension.thing`: Set to `blah` to do something.
+### 安装依赖
 
-## Known Issues
+```bash
+npm install
+```
 
-Calling out known issues can help limit users opening duplicate issues against your extension.
+### 编译
 
-## Release Notes
+```bash
+npm run compile
+```
 
-Users appreciate release notes as you update your extension.
+### 运行
 
-### 1.0.0
+按 F5 在开发模式下启动扩展。
 
-Initial release of ...
+### 打包
 
-### 1.0.1
+```bash
+npm run package
+```
 
-Fixed issue #.
+## 许可证
 
-### 1.1.0
-
-Added features X, Y, and Z.
-
----
-
-## Following extension guidelines
-
-Ensure that you've read through the extensions guidelines and follow the best practices for creating your extension.
-
-* [Extension Guidelines](https://code.visualstudio.com/api/references/extension-guidelines)
-
-## Working with Markdown
-
-You can author your README using Visual Studio Code. Here are some useful editor keyboard shortcuts:
-
-* Split the editor (`Cmd+\` on macOS or `Ctrl+\` on Windows and Linux).
-* Toggle preview (`Shift+Cmd+V` on macOS or `Shift+Ctrl+V` on Windows and Linux).
-* Press `Ctrl+Space` (Windows, Linux, macOS) to see a list of Markdown snippets.
-
-## For more information
-
-* [Visual Studio Code's Markdown Support](http://code.visualstudio.com/docs/languages/markdown)
-* [Markdown Syntax Reference](https://help.github.com/articles/markdown-basics/)
-
-**Enjoy!**
+MIT

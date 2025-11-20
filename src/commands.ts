@@ -13,7 +13,8 @@ export function registerCommands(
   logger: Logger,
   referenceAnalyzer: ReferenceAnalyzer,
   treeProvider: FileReferenceTreeProvider,
-  webviewProvider: WebviewProvider
+  webviewProvider: WebviewProvider,
+  statusBarItem: vscode.StatusBarItem
 ): void {
   // 显示图表
   context.subscriptions.push(
@@ -57,6 +58,12 @@ export function registerCommands(
             // 刷新树视图
             treeProvider.refresh();
             
+            // 更新状态栏
+            const files = referenceAnalyzer.getFiles();
+            const fileCount = Object.keys(files).length;
+            statusBarItem.text = `$(references) ${fileCount} files analyzed`;
+            statusBarItem.show();
+            
             progress.report({ increment: 50, message: 'Done' });
           }
         );
@@ -96,6 +103,37 @@ export function registerCommands(
         logger.error(`Error finding references: ${error}`);
         vscode.window.showErrorMessage(`Failed to find references for: ${filePath}`);
       }
+    })
+  );
+  // Sort commands
+  context.subscriptions.push(
+    vscode.commands.registerCommand('codeRefTracker.sortByName', () => {
+      treeProvider.setSortMode('name');
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('codeRefTracker.sortByIncoming', () => {
+      treeProvider.setSortMode('incoming');
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('codeRefTracker.sortByOutgoing', () => {
+      treeProvider.setSortMode('outgoing');
+    })
+  );
+
+  // Filter commands
+  context.subscriptions.push(
+    vscode.commands.registerCommand('codeRefTracker.filterOrphans', () => {
+      treeProvider.setFilterMode('orphans');
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('codeRefTracker.resetFilter', () => {
+      treeProvider.setFilterMode('all');
     })
   );
 }

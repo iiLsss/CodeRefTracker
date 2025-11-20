@@ -1,5 +1,5 @@
 // 视图模式类型
-export type ViewMode = 'network' | 'tree' | 'matrix' | 'heatmap';
+export type ViewMode = 'network' | 'tree' | 'matrix' | 'heatmap' | 'flow';
 
 // 节点类型
 export interface Node {

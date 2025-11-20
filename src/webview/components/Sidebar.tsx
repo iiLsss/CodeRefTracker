@@ -70,45 +70,7 @@ const Sidebar: React.FC<SidebarProps> = ({
     }
   };
   
-  // 获取选中节点的详细信息
-  const selectedNodeDetails = useMemo(() => {
-    if (!graphData || !selectedNode) {return null;}
-    
-    const node = graphData.nodes.find(n => n.id === selectedNode);
-    if (!node) {return null;}
-    
-    // 获取传入引用
-    const incomingRefs = graphData.links
-      .filter(link => link.target === selectedNode)
-      .map(link => {
-        const sourceNode = graphData.nodes.find(n => n.id === link.source);
-        return sourceNode ? {
-          id: link.source,
-          name: sourceNode.name,
-          path: sourceNode.fullPath
-        } : null;
-      })
-      .filter(Boolean);
-    
-    // 获取传出引用
-    const outgoingRefs = graphData.links
-      .filter(link => link.source === selectedNode)
-      .map(link => {
-        const targetNode = graphData.nodes.find(n => n.id === link.target);
-        return targetNode ? {
-          id: link.target,
-          name: targetNode.name,
-          path: targetNode.fullPath
-        } : null;
-      })
-      .filter(Boolean);
-    
-    return {
-      node,
-      incomingRefs,
-      outgoingRefs
-    };
-  }, [graphData, selectedNode]);
+
   
   // 如果没有数据，显示空状态
   if (!graphData) {
@@ -189,74 +151,6 @@ const Sidebar: React.FC<SidebarProps> = ({
         ))}
       </div>
       
-      {/* 选中节点详情 */}
-      {selectedNodeDetails && (
-        <div className="border-t border-gray-300 p-2 bg-white">
-          <div className="font-medium text-sm mb-1 truncate" title={selectedNodeDetails.node.fullPath}>
-            {selectedNodeDetails.node.name}
-          </div>
-          
-          <div className="flex justify-between text-xs text-gray-600 mb-2">
-            <span>In: {selectedNodeDetails.node.incomingCount}</span>
-            <span>Out: {selectedNodeDetails.node.outgoingCount}</span>
-          </div>
-          
-          <button
-            className="w-full px-2 py-1 bg-blue-500 text-white rounded text-xs mb-2"
-            onClick={() => onOpenFile(selectedNodeDetails.node.fullPath)}
-          >
-            Open File
-          </button>
-          
-          {/* 引用标签页 */}
-          <div className="text-xs">
-            <div className="flex border-b border-gray-300">
-              <div className="px-2 py-1 border-b-2 border-blue-500 font-medium">
-                References
-              </div>
-            </div>
-            
-            {/* 引用列表 */}
-            <div className="max-h-32 overflow-y-auto mt-1">
-              {selectedNodeDetails.incomingRefs.length > 0 && (
-                <div className="mb-2">
-                  <div className="font-medium mb-1">Incoming:</div>
-                  {selectedNodeDetails.incomingRefs.map((ref, index) => (
-                    <div 
-                      key={ref?.id || index}
-                      className={`flex justify-between items-center p-2 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer ${ref?.id === selectedNode ? 'bg-blue-100 dark:bg-blue-900' : ''}`}
-                      onClick={() => ref && onNodeSelect(ref.id)}
-                      title={ref?.path || ''}
-                    >
-                      <span className="truncate">{ref?.name || 'Unknown'}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-              
-              {selectedNodeDetails.outgoingRefs.length > 0 && (
-                <div>
-                  <div className="font-medium mb-1">Outgoing:</div>
-                  {selectedNodeDetails.outgoingRefs.map((ref, index) => (
-                    <div 
-                      key={ref?.id || index}
-                      className={`flex justify-between items-center p-2 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer ${ref?.id === selectedNode ? 'bg-blue-100 dark:bg-blue-900' : ''}`}
-                      onClick={() => ref && onNodeSelect(ref.id)}
-                      title={ref?.path || ''}
-                    >
-                      <span className="truncate">{ref?.name || 'Unknown'}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-              
-              {selectedNodeDetails.incomingRefs.length === 0 && selectedNodeDetails.outgoingRefs.length === 0 && (
-                <div className="text-gray-500 py-1">No references found</div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

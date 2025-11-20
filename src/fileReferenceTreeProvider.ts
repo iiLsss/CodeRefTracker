@@ -2,7 +2,10 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import { ReferenceAnalyzer, FileReferences } from './referenceAnalyzer';
 
-// 文件夹类型
+export type SortMode = 'name' | 'incoming' | 'outgoing';
+export type FilterMode = 'all' | 'orphans';
+
+// Folder interface
 export interface Folder {
   name: string;
   path: string;
@@ -11,7 +14,7 @@ export interface Folder {
   outgoingCount: number;
 }
 
-// 文件类型
+// File interface
 export interface FileItem {
   name: string;
   path: string;
@@ -19,7 +22,7 @@ export interface FileItem {
   outgoingReferences: string[];
 }
 
-// 树节点类型
+// Tree Item
 export class TreeItem extends vscode.TreeItem {
   constructor(
     public readonly label: string,
@@ -31,84 +34,103 @@ export class TreeItem extends vscode.TreeItem {
   ) {
     super(label, collapsibleState);
     
-    // 设置工具提示
     this.tooltip = `${path}\nIncoming: ${incomingCount}, Outgoing: ${outgoingCount}`;
+    this.description = `${incomingCount} ⬇️  ${outgoingCount} ⬆️`;
     
-    // 设置描述
-    this.description = `${incomingCount} in, ${outgoingCount} out`;
-    
-    // 设置图标
     if (contextValue === 'file') {
-      // 根据引用数量设置不同的图标
+      this.resourceUri = vscode.Uri.file(path);
+      
       if (incomingCount === 0 && outgoingCount === 0) {
-        this.iconPath = new vscode.ThemeIcon('file');
-      } else if (incomingCount > 5 || outgoingCount > 5) {
-        this.iconPath = new vscode.ThemeIcon('flame');
-      } else if (incomingCount === 0 && outgoingCount > 0) {
-        this.iconPath = new vscode.ThemeIcon('arrow-right');
-      } else if (incomingCount > 0 && outgoingCount === 0) {
-        this.iconPath = new vscode.ThemeIcon('arrow-left');
+        this.iconPath = new vscode.ThemeIcon('circle-outline'); // Orphan
+        this.description += ' (Orphan)';
+      } else if (incomingCount > 10) {
+        this.iconPath = new vscode.ThemeIcon('flame'); // Hot
       } else {
-        this.iconPath = new vscode.ThemeIcon('references');
+        this.iconPath = vscode.ThemeIcon.File;
       }
-    } else {
-      this.iconPath = new vscode.ThemeIcon('folder');
-    }
-    
-    // 设置命令
-    if (contextValue === 'file') {
+
       this.command = {
         command: 'vscode.open',
         arguments: [vscode.Uri.file(path)],
         title: 'Open File'
       };
+    } else {
+      this.iconPath = vscode.ThemeIcon.Folder;
     }
   }
 }
 
-// 文件引用树提供者
 export class FileReferenceTreeProvider implements vscode.TreeDataProvider<TreeItem> {
   private _onDidChangeTreeData: vscode.EventEmitter<TreeItem | undefined | null | void> = new vscode.EventEmitter<TreeItem | undefined | null | void>();
   readonly onDidChangeTreeData: vscode.Event<TreeItem | undefined | null | void> = this._onDidChangeTreeData.event;
   
   private _referenceAnalyzer: ReferenceAnalyzer;
   private _rootFolders: Folder[] = [];
+  private _sortMode: SortMode = 'name';
+  private _filterMode: FilterMode = 'all';
   
   constructor(referenceAnalyzer: ReferenceAnalyzer) {
     this._referenceAnalyzer = referenceAnalyzer;
   }
   
-  /**
-   * 刷新树视图
-   */
   public refresh(): void {
     this._rootFolders = [];
     this._onDidChangeTreeData.fire();
   }
+
+  public setSortMode(mode: SortMode) {
+    this._sortMode = mode;
+    this.refresh();
+  }
+
+  public setFilterMode(mode: FilterMode) {
+    this._filterMode = mode;
+    this.refresh();
+  }
   
-  /**
-   * 获取树项
-   */
   public getTreeItem(element: TreeItem): vscode.TreeItem {
     return element;
   }
   
-  /**
-   * 获取子项
-   */
   public getChildren(element?: TreeItem): Thenable<TreeItem[]> {
     if (!element) {
-      // 根节点
       return this.getRootItems();
     }
     
-    // 查找文件夹
     const folder = this.findFolder(this._rootFolders, element.path);
     if (folder) {
+      let children = folder.children;
+
+      // Filter
+      if (this._filterMode === 'orphans') {
+        children = children.filter(child => {
+          if ('children' in child) return true; // Keep folders
+          return child.incomingReferences.length === 0 && child.outgoingReferences.length === 0;
+        });
+      }
+
+      // Sort
+      children.sort((a, b) => {
+        if ('children' in a && !('children' in b)) return -1; // Folders first
+        if (!('children' in a) && 'children' in b) return 1;
+
+        if (this._sortMode === 'name') {
+          return a.name.localeCompare(b.name);
+        } else if (this._sortMode === 'incoming') {
+          const countA = 'children' in a ? a.incomingCount : a.incomingReferences.length;
+          const countB = 'children' in b ? b.incomingCount : b.incomingReferences.length;
+          return countB - countA;
+        } else if (this._sortMode === 'outgoing') {
+          const countA = 'children' in a ? a.outgoingCount : a.outgoingReferences.length;
+          const countB = 'children' in b ? b.outgoingCount : b.outgoingReferences.length;
+          return countB - countA;
+        }
+        return 0;
+      });
+
       return Promise.resolve(
-        folder.children.map(child => {
+        children.map(child => {
           if ('children' in child) {
-            // 文件夹
             return new TreeItem(
               child.name,
               vscode.TreeItemCollapsibleState.Collapsed,
@@ -118,7 +140,6 @@ export class FileReferenceTreeProvider implements vscode.TreeDataProvider<TreeIt
               child.outgoingCount
             );
           } else {
-            // 文件
             return new TreeItem(
               child.name,
               vscode.TreeItemCollapsibleState.None,
@@ -135,16 +156,11 @@ export class FileReferenceTreeProvider implements vscode.TreeDataProvider<TreeIt
     return Promise.resolve([]);
   }
   
-  /**
-   * 获取根项
-   */
   private async getRootItems(): Promise<TreeItem[]> {
-    // 如果根文件夹为空，则构建文件树
     if (this._rootFolders.length === 0) {
       await this.buildFileTree();
     }
     
-    // 返回根文件夹
     return this._rootFolders.map(folder => {
       return new TreeItem(
         folder.name,
@@ -157,20 +173,12 @@ export class FileReferenceTreeProvider implements vscode.TreeDataProvider<TreeIt
     });
   }
   
-  /**
-   * 构建文件树
-   */
   private async buildFileTree(): Promise<void> {
-    // 获取工作区文件夹
     const workspaceFolders = vscode.workspace.workspaceFolders;
-    if (!workspaceFolders) {
-      return;
-    }
+    if (!workspaceFolders) return;
     
-    // 获取引用信息
     const references = this._referenceAnalyzer.getReferences();
     
-    // 创建根文件夹
     for (const folder of workspaceFolders) {
       const rootFolder: Folder = {
         name: folder.name,
@@ -180,45 +188,31 @@ export class FileReferenceTreeProvider implements vscode.TreeDataProvider<TreeIt
         outgoingCount: 0
       };
       
-      // 添加文件
       for (const [filePath, fileRef] of Object.entries(references)) {
-        // 检查文件是否在当前工作区
         if (filePath.startsWith(rootFolder.path)) {
-          // 添加文件到树
           this.addFileToTree(rootFolder, filePath, fileRef);
         }
       }
       
-      // 计算文件夹引用计数
       this.calculateFolderReferenceCounts(rootFolder);
-      
-      // 添加到根文件夹
       this._rootFolders.push(rootFolder);
     }
   }
   
-  /**
-   * 添加文件到树
-   */
   private addFileToTree(rootFolder: Folder, filePath: string, fileRef: FileReferences): void {
-    // 获取相对路径
     const relativePath = filePath.substring(rootFolder.path.length + 1);
     const pathParts = relativePath.split(path.sep);
     
-    // 当前文件夹
     let currentFolder = rootFolder;
     
-    // 遍历路径
     for (let i = 0; i < pathParts.length - 1; i++) {
       const folderName = pathParts[i];
       const folderPath = path.join(currentFolder.path, folderName);
       
-      // 查找子文件夹
       let childFolder = currentFolder.children.find(
         child => 'children' in child && child.path === folderPath
       ) as Folder | undefined;
       
-      // 如果子文件夹不存在，则创建
       if (!childFolder) {
         childFolder = {
           name: folderName,
@@ -230,11 +224,9 @@ export class FileReferenceTreeProvider implements vscode.TreeDataProvider<TreeIt
         currentFolder.children.push(childFolder);
       }
       
-      // 更新当前文件夹
       currentFolder = childFolder;
     }
     
-    // 添加文件
     const fileName = pathParts[pathParts.length - 1];
     const fileItem: FileItem = {
       name: fileName,
@@ -243,58 +235,41 @@ export class FileReferenceTreeProvider implements vscode.TreeDataProvider<TreeIt
       outgoingReferences: fileRef.outgoingReferences
     };
     
-    // 添加到当前文件夹
     currentFolder.children.push(fileItem);
   }
   
-  /**
-   * 计算文件夹引用计数
-   */
   private calculateFolderReferenceCounts(folder: Folder): { incomingCount: number, outgoingCount: number } {
     let incomingCount = 0;
     let outgoingCount = 0;
     
-    // 遍历子项
     for (const child of folder.children) {
       if ('children' in child) {
-        // 子文件夹
         const counts = this.calculateFolderReferenceCounts(child);
         incomingCount += counts.incomingCount;
         outgoingCount += counts.outgoingCount;
       } else {
-        // 文件
         incomingCount += child.incomingReferences.length;
         outgoingCount += child.outgoingReferences.length;
       }
     }
     
-    // 更新文件夹计数
     folder.incomingCount = incomingCount;
     folder.outgoingCount = outgoingCount;
     
     return { incomingCount, outgoingCount };
   }
   
-  /**
-   * 查找文件夹
-   */
   private findFolder(folders: Folder[], path: string): Folder | null {
     for (const folder of folders) {
-      if (folder.path === path) {
-        return folder;
-      }
+      if (folder.path === path) return folder;
       
-      // 递归查找子文件夹
       for (const child of folder.children) {
         if ('children' in child) {
           const found = this.findFolder([child], path);
-          if (found) {
-            return found;
-          }
+          if (found) return found;
         }
       }
     }
-    
     return null;
   }
-} 
+}

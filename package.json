@@ -22,9 +22,74 @@
       },
       {
         "command": "codeRefTracker.refreshReferences",
-        "title": "Refresh Code References"
+        "title": "Refresh Code References",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "codeRefTracker.sortByName",
+        "title": "Sort by Name",
+        "icon": "$(list-ordered)"
+      },
+      {
+        "command": "codeRefTracker.sortByIncoming",
+        "title": "Sort by Most Referenced",
+        "icon": "$(arrow-down)"
+      },
+      {
+        "command": "codeRefTracker.sortByOutgoing",
+        "title": "Sort by Most Dependencies",
+        "icon": "$(arrow-up)"
+      },
+      {
+        "command": "codeRefTracker.filterOrphans",
+        "title": "Show Orphans Only",
+        "icon": "$(circle-outline)"
+      },
+      {
+        "command": "codeRefTracker.resetFilter",
+        "title": "Reset Filters",
+        "icon": "$(clear-all)"
       }
     ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "codeRefTracker.refreshReferences",
+          "when": "view == codeReferencesExplorer",
+          "group": "navigation"
+        },
+        {
+          "command": "codeRefTracker.sortByName",
+          "when": "view == codeReferencesExplorer",
+          "group": "1_sort"
+        },
+        {
+          "command": "codeRefTracker.sortByIncoming",
+          "when": "view == codeReferencesExplorer",
+          "group": "1_sort"
+        },
+        {
+          "command": "codeRefTracker.sortByOutgoing",
+          "when": "view == codeReferencesExplorer",
+          "group": "1_sort"
+        },
+        {
+          "command": "codeRefTracker.filterOrphans",
+          "when": "view == codeReferencesExplorer",
+          "group": "2_filter"
+        },
+        {
+          "command": "codeRefTracker.resetFilter",
+          "when": "view == codeReferencesExplorer",
+          "group": "2_filter"
+        },
+        {
+          "command": "codeRefTracker.showGraph",
+          "when": "view == codeReferencesExplorer",
+          "group": "navigation"
+        }
+      ]
+    },
     "viewsContainers": {
       "activitybar": [
         {
@@ -78,15 +143,26 @@
     "style-loader": "^3.3.3",
     "tailwindcss": "^3.3.6",
     "ts-loader": "^9.5.1",
-    "typescript": "^4.9.5",
     "webpack": "^5.89.0",
     "webpack-cli": "^5.1.4"
   },
   "dependencies": {
+    "@egjs/hammerjs": "^2.0.17",
+    "@types/cytoscape": "^3.21.9",
+    "component-emitter": "^2.0.0",
+    "cytoscape": "^3.32.0",
+    "cytoscape-dagre": "^2.5.0",
+    "d3": "^7.8.5",
     "ignore": "^5.3.0",
+    "keycharm": "^0.4.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-force-graph": "^1.44.1",
-    "d3": "^7.8.5"
+    "recharts": "^3.0.0",
+    "uuid": "^11.1.0",
+    "vis-data": "^7.1.9",
+    "vis-network": "^9.1.12",
+    "vis-util": "^5.0.7",
+    "typescript": "^4.9.5"
   }
 }

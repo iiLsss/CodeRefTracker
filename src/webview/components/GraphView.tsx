@@ -3,6 +3,7 @@ import NetworkGraph from './graphs/NetworkGraph';
 import TreeGraph from './graphs/TreeGraph';
 import MatrixView from './graphs/MatrixView';
 import HeatmapView from './graphs/HeatmapView';
+import FlowGraph from './graphs/FlowGraph';
 import { GraphData, ViewMode } from '../types';
 
 // 图表视图属性
@@ -50,6 +51,14 @@ const GraphView: React.FC<GraphViewProps> = ({
     case 'matrix':
       return (
         <MatrixView 
+          data={data} 
+          selectedNode={selectedNode} 
+          onNodeSelect={onNodeSelect} 
+        />
+      );
+    case 'flow':
+      return (
+        <FlowGraph 
           data={data} 
           selectedNode={selectedNode} 
           onNodeSelect={onNodeSelect} 

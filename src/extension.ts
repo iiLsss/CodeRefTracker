@@ -12,7 +12,9 @@ export function activate(context: vscode.ExtensionContext) {
 	logger.info('Activating CodeRefTracker extension');
 	
 	// 创建引用分析器
-	const referenceAnalyzer = new ReferenceAnalyzer(logger);
+	const workspaceRoot = vscode.workspace.workspaceFolders?.[0].uri.fsPath || '';
+	const storagePath = context.storageUri?.fsPath;
+	const referenceAnalyzer = new ReferenceAnalyzer(logger, workspaceRoot, storagePath);
 	
 	// 创建文件引用树提供者
 	const treeProvider = new FileReferenceTreeProvider(referenceAnalyzer);
@@ -38,15 +40,29 @@ export function activate(context: vscode.ExtensionContext) {
 		)
 	);
 	
+	// 创建状态栏项
+	const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
+	statusBarItem.command = 'codeRefTracker.showGraph';
+	context.subscriptions.push(statusBarItem);
+
 	// 注册命令
 	registerCommands(
 		context,
 		logger,
 		referenceAnalyzer,
 		treeProvider,
-		webviewProvider
+		webviewProvider,
+		statusBarItem
 	);
 	
+	// 更新状态栏函数
+	const updateStatusBar = () => {
+		const files = referenceAnalyzer.getFiles();
+		const fileCount = Object.keys(files).length;
+		statusBarItem.text = `$(references) ${fileCount} files analyzed`;
+		statusBarItem.show();
+	};
+
 	// 监听文件变化
 	const fileWatcher = vscode.workspace.createFileSystemWatcher('**/*.{ts,tsx,js,jsx,vue,css,scss,less,html}');
 	
@@ -55,6 +71,7 @@ export function activate(context: vscode.ExtensionContext) {
 		logger.debug(`File created: ${uri.fsPath}`);
 		await referenceAnalyzer.analyzeFile(uri.fsPath);
 		treeProvider.refresh();
+		updateStatusBar();
 	});
 	
 	// 文件修改
@@ -62,6 +79,7 @@ export function activate(context: vscode.ExtensionContext) {
 		logger.debug(`File changed: ${uri.fsPath}`);
 		await referenceAnalyzer.analyzeFile(uri.fsPath);
 		treeProvider.refresh();
+		updateStatusBar();
 	});
 	
 	// 文件删除
@@ -69,6 +87,7 @@ export function activate(context: vscode.ExtensionContext) {
 		logger.debug(`File deleted: ${uri.fsPath}`);
 		referenceAnalyzer.removeFile(uri.fsPath);
 		treeProvider.refresh();
+		updateStatusBar();
 	});
 	
 	// 添加到订阅

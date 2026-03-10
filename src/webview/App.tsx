@@ -1,201 +1,171 @@
-import React, { useEffect, useState, useMemo } from 'react';
-import GraphView from './components/GraphView';
-import Toolbar from './components/Toolbar';
+import { useState, useEffect, useCallback } from 'react';
+import { GraphData, ExtensionMessage, WebviewMessage } from '../types';
+import vscode from './utils/vscode';
 import Sidebar from './components/Sidebar';
+import GraphView from './components/GraphView';
 import DetailsPanel from './components/DetailsPanel';
-import { GraphData, ViewMode } from './types';
+import Toolbar from './components/Toolbar';
+import Dashboard from './components/Dashboard';
 
-// VSCode API 类型
-interface VSCodeAPI {
-  postMessage: (message: any) => void;
-  getState: () => any;
-  setState: (state: any) => void;
+export type ViewLayout = 'force' | 'tree' | 'radial';
+export type ViewMode = 'graph' | 'dashboard';
+
+export interface FileFilter {
+  types: string[];
+  directory: string;
+  search: string;
 }
 
-// 应用属性
-interface AppProps {
-  vscode: VSCodeAPI;
-}
-
-// 应用组件
-const App: React.FC<AppProps> = ({ vscode }) => {
-  // 状态
+export default function App() {
   const [graphData, setGraphData] = useState<GraphData | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<ViewMode>('flow');
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
-  const [isFocusMode, setIsFocusMode] = useState<boolean>(false);
-  
-  // 处理消息
+  const [layout, setLayout] = useState<ViewLayout>('force');
+  const [viewMode, setViewMode] = useState<ViewMode>('graph');
+  const [filter, setFilter] = useState<FileFilter>({ types: [], directory: '', search: '' });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [expandLevel, setExpandLevel] = useState(1);
+
   useEffect(() => {
-    const handleMessage = (event: MessageEvent) => {
-      const message = event.data;
-      switch (message.type) {
+    const handler = (event: MessageEvent) => {
+      const msg = event.data as ExtensionMessage;
+      switch (msg.type) {
         case 'graphData':
-          setGraphData(message.data);
+          setGraphData(msg.data);
           setLoading(false);
+          setError(null);
+          break;
+        case 'focusNode':
+          setSelectedNode(msg.nodeId);
+          setViewMode('graph');
           break;
         case 'error':
-          setError(message.message);
+          setError(msg.message);
           setLoading(false);
           break;
       }
     };
+    window.addEventListener('message', handler);
+    vscode.postMessage({ type: 'ready' } as WebviewMessage);
+    return () => window.removeEventListener('message', handler);
+  }, []);
 
-    window.addEventListener('message', handleMessage);
-    vscode.postMessage({ type: 'getGraphData' });
-
-    return () => {
-      window.removeEventListener('message', handleMessage);
-    };
-  }, [vscode]);
-
-  // 过滤数据 (Focus Mode)
-  const filteredData = useMemo(() => {
-    if (!graphData) return null;
-    if (!isFocusMode || !selectedNode) return graphData;
-
-    // 找出相关节点 (1度分隔)
-    const relatedNodeIds = new Set<string>();
-    relatedNodeIds.add(selectedNode);
-
-    graphData.links.forEach(link => {
-      if (link.source === selectedNode) relatedNodeIds.add(link.target);
-      if (link.target === selectedNode) relatedNodeIds.add(link.source);
-    });
-
-    const nodes = graphData.nodes.filter(node => relatedNodeIds.has(node.id));
-    const links = graphData.links.filter(link => 
-      relatedNodeIds.has(link.source) && relatedNodeIds.has(link.target)
-    );
-
-    return {
-      ...graphData,
-      nodes,
-      links
-    };
-  }, [graphData, isFocusMode, selectedNode]);
-
-  // 处理刷新
-  const handleRefresh = () => {
-    setLoading(true);
-    vscode.postMessage({ type: 'refresh' });
-  };
-  
-  // 处理导出
-  const handleExport = (format: 'json' | 'csv') => {
-    vscode.postMessage({ type: 'export', format });
-  };
-  
-  // 处理视图模式切换
-  const handleViewModeChange = (mode: ViewMode) => {
-    setViewMode(mode);
-  };
-  
-  // 处理节点选择
-  const handleNodeSelect = (nodeId: string) => {
+  const handleNodeSelect = useCallback((nodeId: string | null) => {
     setSelectedNode(nodeId);
-  };
-  
-  // 处理文件打开
-  const handleOpenFile = (filePath: string) => {
-    vscode.postMessage({ type: 'openFile', filePath });
-  };
-  
-  // 渲染加载状态
+    setExpandLevel(1);
+  }, []);
+
+  const handleOpenFile = useCallback((p: string) => {
+    vscode.postMessage({ type: 'openFile', path: p } as WebviewMessage);
+  }, []);
+
+  const handleRefresh = useCallback(() => {
+    setLoading(true);
+    vscode.postMessage({ type: 'refresh' } as WebviewMessage);
+  }, []);
+
+  const selectedFileNode = graphData?.nodes.find(n => n.id === selectedNode) ?? null;
+  const filteredData = graphData ? applyFilters(graphData, filter) : null;
+
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-200">
-        <div className="flex flex-col items-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mb-4"></div>
-          <p>Loading graph data...</p>
+      <div className="flex items-center justify-center h-full">
+        <div className="text-center">
+          <div className="animate-spin w-8 h-8 border-2 border-current border-t-transparent rounded-full mx-auto mb-3 opacity-40" />
+          <p className="text-sm opacity-50">Analyzing references...</p>
         </div>
       </div>
     );
   }
-  
-  // 渲染错误状态
+
   if (error) {
     return (
-      <div className="flex items-center justify-center h-screen bg-white dark:bg-gray-900 text-red-500">
-        <div className="text-center">
-          <p className="text-xl font-bold mb-2">Error</p>
-          <p>{error}</p>
-          <button 
-            className="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-            onClick={handleRefresh}
-          >
+      <div className="flex items-center justify-center h-full">
+        <div className="text-center max-w-sm">
+          <p className="text-sm mb-3 opacity-70">{error}</p>
+          <button onClick={handleRefresh} className="px-4 py-1.5 text-xs rounded"
+            style={{ background: 'var(--btn-bg)', color: 'var(--btn-fg)' }}>
             Retry
           </button>
         </div>
       </div>
     );
   }
-  
-  // 渲染无数据状态
-  if (!graphData || graphData.nodes.length === 0) {
-    return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="text-center">
-          <h2 className="text-xl font-bold mb-2">No References Found</h2>
-          <p className="text-gray-600">No code references were found in the current workspace.</p>
-          <button 
-            className="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-            onClick={handleRefresh}
-          >
-            Refresh
-          </button>
-        </div>
-      </div>
-    );
-  }
-  
-  // 渲染主界面
+
   return (
-    <div className="flex flex-col h-screen bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-200">
-      {/* 工具栏 */}
-      <Toolbar 
-        viewMode={viewMode} 
-        onViewModeChange={handleViewModeChange} 
-        onRefresh={handleRefresh} 
-        onExport={handleExport}
-        isFocusMode={isFocusMode}
-        onToggleFocusMode={() => setIsFocusMode(!isFocusMode)}
-      />
-      
-      <div className="flex flex-1 overflow-hidden relative">
-        {/* 侧边栏 */}
-        <Sidebar 
-          graphData={filteredData} 
-          selectedNode={selectedNode} 
-          onNodeSelect={handleNodeSelect} 
-          onOpenFile={handleOpenFile} 
-        />
-        
-        {/* 图表视图 */}
-        <div className="flex-1 overflow-hidden relative">
-          <GraphView 
-            data={filteredData} 
-            viewMode={viewMode} 
-            selectedNode={selectedNode} 
-            onNodeSelect={handleNodeSelect} 
+    <div className="flex flex-col h-full">
+      <div className="flex flex-1 min-h-0">
+        {sidebarOpen && (
+          <Sidebar
+            data={filteredData}
+            allData={graphData}
+            selectedNode={selectedNode}
+            onNodeSelect={handleNodeSelect}
+            onOpenFile={handleOpenFile}
+            filter={filter}
+            onFilterChange={setFilter}
           />
-          
-          {/* 详情面板 */}
-          {graphData && (
-            <DetailsPanel
-              graphData={graphData}
-              selectedNodeId={selectedNode}
-              onClose={() => setSelectedNode(null)}
-              onNodeSelect={handleNodeSelect}
-              onOpenFile={handleOpenFile}
-            />
-          )}
-        </div>
+        )}
+        {viewMode === 'graph' ? (
+          <GraphView
+            data={filteredData}
+            allData={graphData}
+            selectedNode={selectedNode}
+            onNodeSelect={handleNodeSelect}
+            onOpenFile={handleOpenFile}
+            layout={layout}
+            expandLevel={expandLevel}
+          />
+        ) : (
+          <Dashboard data={graphData} onNodeSelect={handleNodeSelect} />
+        )}
+        {selectedFileNode && viewMode === 'graph' && (
+          <DetailsPanel
+            node={selectedFileNode}
+            allNodes={graphData?.nodes ?? []}
+            onNodeSelect={handleNodeSelect}
+            onOpenFile={handleOpenFile}
+            onClose={() => setSelectedNode(null)}
+            expandLevel={expandLevel}
+            onExpandLevelChange={setExpandLevel}
+          />
+        )}
       </div>
+      <Toolbar
+        layout={layout}
+        onLayoutChange={setLayout}
+        viewMode={viewMode}
+        onViewModeChange={setViewMode}
+        stats={graphData?.stats ?? null}
+        onRefresh={handleRefresh}
+        sidebarOpen={sidebarOpen}
+        onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
+      />
     </div>
   );
-};
+}
 
-export default App; 
+function applyFilters(data: GraphData, filter: FileFilter): GraphData {
+  let nodes = data.nodes;
+
+  if (filter.search) {
+    const q = filter.search.toLowerCase();
+    nodes = nodes.filter(n =>
+      n.name.toLowerCase().includes(q) || n.path.toLowerCase().includes(q),
+    );
+  }
+
+  if (filter.types.length > 0) {
+    nodes = nodes.filter(n => filter.types.includes(n.extension));
+  }
+
+  if (filter.directory) {
+    nodes = nodes.filter(n => n.path.startsWith(filter.directory));
+  }
+
+  const ids = new Set(nodes.map(n => n.id));
+  const edges = data.edges.filter(e => ids.has(e.source) && ids.has(e.target));
+
+  return { nodes, edges, stats: data.stats, circularDeps: data.circularDeps };
+}

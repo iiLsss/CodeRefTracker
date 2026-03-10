@@ -1,114 +1,182 @@
-import React from 'react';
-import { GraphData } from '../types';
+import { FileNode } from '../../types';
+import { getDirColor } from '../utils/colors';
 
-interface DetailsPanelProps {
-  graphData: GraphData;
-  selectedNodeId: string | null;
+interface Props {
+  node: FileNode;
+  allNodes: FileNode[];
+  onNodeSelect: (id: string | null) => void;
+  onOpenFile: (path: string) => void;
   onClose: () => void;
-  onNodeSelect: (nodeId: string) => void;
-  onOpenFile: (filePath: string) => void;
+  expandLevel: number;
+  onExpandLevelChange: (level: number) => void;
 }
 
-const DetailsPanel: React.FC<DetailsPanelProps> = ({
-  graphData,
-  selectedNodeId,
-  onClose,
-  onNodeSelect,
-  onOpenFile
-}) => {
-  if (!selectedNodeId || !graphData) return null;
-
-  const node = graphData.nodes.find(n => n.id === selectedNodeId);
-  if (!node) return null;
-
-  const incomingRefs = graphData.links
-    .filter(link => link.target === selectedNodeId)
-    .map(link => graphData.nodes.find(n => n.id === link.source))
-    .filter(Boolean);
-
-  const outgoingRefs = graphData.links
-    .filter(link => link.source === selectedNodeId)
-    .map(link => graphData.nodes.find(n => n.id === link.target))
-    .filter(Boolean);
+export default function DetailsPanel({
+  node, allNodes, onNodeSelect, onOpenFile, onClose,
+  expandLevel, onExpandLevelChange,
+}: Props) {
+  const nodeMap = new Map(allNodes.map(n => [n.id, n]));
+  const imports = node.imports.map(id => nodeMap.get(id)).filter(Boolean) as FileNode[];
+  const importedBy = node.importedBy.map(id => nodeMap.get(id)).filter(Boolean) as FileNode[];
 
   return (
-    <div className="absolute top-0 right-0 w-80 h-full bg-white shadow-xl border-l border-gray-200 transform transition-transform duration-300 ease-in-out overflow-y-auto z-10">
-      <div className="p-4">
-        <div className="flex justify-between items-start mb-4">
-          <h2 className="text-xl font-bold text-gray-800 truncate" title={node.name}>
-            {node.name}
-          </h2>
-          <button 
-            onClick={onClose}
-            className="text-gray-500 hover:text-gray-700"
-          >
-            ✕
-          </button>
-        </div>
+    <div
+      className="flex flex-col h-full overflow-hidden border-l"
+      style={{
+        width: 260,
+        minWidth: 260,
+        background: 'var(--panel-bg)',
+        borderColor: 'var(--panel-border)',
+        color: 'var(--panel-fg)',
+      }}>
 
-        <div className="mb-6">
-          <div className="text-sm text-gray-500 mb-1">Full Path</div>
-          <div className="text-xs bg-gray-100 p-2 rounded break-all font-mono">
-            {node.fullPath}
-          </div>
+      {/* Header */}
+      <div className="flex items-center justify-between p-3 border-b"
+        style={{ borderColor: 'var(--panel-border)' }}>
+        <div className="flex-1 min-w-0">
+          <h3 className="text-xs font-semibold truncate">{node.name}</h3>
+          <p className="text-[10px] opacity-50 truncate mt-0.5">{node.path}</p>
         </div>
-
-        <div className="grid grid-cols-2 gap-4 mb-6">
-          <div className="bg-blue-50 p-3 rounded text-center">
-            <div className="text-2xl font-bold text-blue-600">{incomingRefs.length}</div>
-            <div className="text-xs text-blue-800 uppercase tracking-wide">Used By</div>
-          </div>
-          <div className="bg-green-50 p-3 rounded text-center">
-            <div className="text-2xl font-bold text-green-600">{outgoingRefs.length}</div>
-            <div className="text-xs text-green-800 uppercase tracking-wide">Dependencies</div>
-          </div>
-        </div>
-
         <button
-          onClick={() => onOpenFile(node.fullPath)}
-          className="w-full bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700 transition-colors mb-6 flex items-center justify-center gap-2"
-        >
-          <span>Open File</span>
+          onClick={onClose}
+          className="ml-2 opacity-50 hover:opacity-100 text-sm leading-none p-1"
+          title="Close">
+          ✕
         </button>
+      </div>
 
-        {incomingRefs.length > 0 && (
-          <div className="mb-6">
-            <h3 className="font-bold text-gray-700 mb-2 border-b pb-1">Used By ({incomingRefs.length})</h3>
-            <ul className="space-y-1">
-              {incomingRefs.map((ref, idx) => (
-                <li 
-                  key={idx}
-                  onClick={() => ref && onNodeSelect(ref.id)}
-                  className="text-sm p-2 hover:bg-gray-100 rounded cursor-pointer flex items-center gap-2 text-gray-700"
-                >
-                  <span className="w-2 h-2 rounded-full bg-blue-400"></span>
-                  <span className="truncate">{ref?.name}</span>
-                </li>
-              ))}
-            </ul>
+      {/* Stats */}
+      <div className="grid grid-cols-2 gap-2 p-3 border-b text-center"
+        style={{ borderColor: 'var(--panel-border)' }}>
+        <StatCard label="Imports" value={imports.length} color="var(--link-fg)" />
+        <StatCard label="Imported by" value={importedBy.length} color="var(--warning)" />
+      </div>
+
+      {/* Info */}
+      <div className="px-3 py-2 border-b text-[10px] space-y-1"
+        style={{ borderColor: 'var(--panel-border)' }}>
+        <div className="flex justify-between">
+          <span className="opacity-50">Directory</span>
+          <span className="flex items-center gap-1">
+            <span className="inline-block w-2 h-2 rounded-full"
+              style={{ background: getDirColor(node.directory) }} />
+            {node.directory || '.'}
+          </span>
+        </div>
+        <div className="flex justify-between">
+          <span className="opacity-50">Type</span>
+          <span>{node.extension}</span>
+        </div>
+        {node.isEntry && (
+          <div className="flex justify-between">
+            <span className="opacity-50">Role</span>
+            <span>Entry file</span>
           </div>
         )}
-
-        {outgoingRefs.length > 0 && (
-          <div className="mb-6">
-            <h3 className="font-bold text-gray-700 mb-2 border-b pb-1">Dependencies ({outgoingRefs.length})</h3>
-            <ul className="space-y-1">
-              {outgoingRefs.map((ref, idx) => (
-                <li 
-                  key={idx}
-                  onClick={() => ref && onNodeSelect(ref.id)}
-                  className="text-sm p-2 hover:bg-gray-100 rounded cursor-pointer flex items-center gap-2 text-gray-700"
-                >
-                  <span className="w-2 h-2 rounded-full bg-green-400"></span>
-                  <span className="truncate">{ref?.name}</span>
-                </li>
-              ))}
-            </ul>
+        {node.isOrphan && (
+          <div className="flex justify-between">
+            <span className="opacity-50">Status</span>
+            <span style={{ color: 'var(--warning)' }}>Orphan</span>
           </div>
         )}
       </div>
+
+      {/* Impact Analysis */}
+      <div className="px-3 py-2 border-b" style={{ borderColor: 'var(--panel-border)' }}>
+        <div className="flex items-center justify-between mb-1">
+          <span className="text-[10px] opacity-50">Expand depth</span>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => onExpandLevelChange(Math.max(1, expandLevel - 1))}
+              className="w-5 h-5 text-[10px] rounded flex items-center justify-center"
+              style={{ background: 'var(--input-bg)' }}
+              disabled={expandLevel <= 1}>
+              −
+            </button>
+            <span className="text-[10px] w-4 text-center">{expandLevel}</span>
+            <button
+              onClick={() => onExpandLevelChange(expandLevel + 1)}
+              className="w-5 h-5 text-[10px] rounded flex items-center justify-center"
+              style={{ background: 'var(--input-bg)' }}>
+              +
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Lists */}
+      <div className="flex-1 overflow-y-auto">
+        <RefList
+          title={`Imports (${imports.length})`}
+          nodes={imports}
+          onSelect={onNodeSelect}
+          onOpen={onOpenFile}
+          icon="↓"
+          color="var(--link-fg)"
+        />
+        <RefList
+          title={`Imported by (${importedBy.length})`}
+          nodes={importedBy}
+          onSelect={onNodeSelect}
+          onOpen={onOpenFile}
+          icon="↑"
+          color="var(--warning)"
+        />
+      </div>
+
+      {/* Open button */}
+      <div className="p-2 border-t" style={{ borderColor: 'var(--panel-border)' }}>
+        <button
+          onClick={() => onOpenFile(node.path)}
+          className="w-full py-1.5 text-[11px] rounded"
+          style={{ background: 'var(--btn-bg)', color: 'var(--btn-fg)' }}>
+          Open in Editor
+        </button>
+      </div>
     </div>
   );
-};
+}
 
-export default DetailsPanel;
+function StatCard({ label, value, color }: { label: string; value: number; color: string }) {
+  return (
+    <div className="rounded p-2" style={{ background: 'var(--input-bg)' }}>
+      <div className="text-base font-bold" style={{ color }}>{value}</div>
+      <div className="text-[9px] opacity-50 mt-0.5">{label}</div>
+    </div>
+  );
+}
+
+function RefList({ title, nodes, onSelect, onOpen, icon, color }: {
+  title: string;
+  nodes: FileNode[];
+  onSelect: (id: string | null) => void;
+  onOpen: (path: string) => void;
+  icon: string;
+  color: string;
+}) {
+  return (
+    <div className="border-b" style={{ borderColor: 'var(--panel-border)' }}>
+      <div className="px-3 py-1.5 text-[10px] opacity-60 font-medium">{title}</div>
+      {nodes.length === 0 ? (
+        <p className="px-3 pb-2 text-[10px] opacity-30">None</p>
+      ) : (
+        <ul>
+          {nodes.map(n => (
+            <li
+              key={n.id}
+              className="flex items-center px-3 py-0.5 text-[11px] cursor-pointer truncate"
+              style={{ color: 'var(--panel-fg)' }}
+              onClick={() => onSelect(n.id)}
+              onDoubleClick={() => onOpen(n.path)}
+              title={n.path}
+              onMouseEnter={e => (e.currentTarget.style.background = 'var(--hover-bg)')}
+              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+              <span className="mr-1.5" style={{ color }}>{icon}</span>
+              {n.name}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}

@@ -1,168 +1,99 @@
 {
-  "name": "codereftracker",
-  "displayName": "CodeRefTracker",
-  "description": "CodeRefTracker is a Visual Studio Code extension that displays the number of references for each file directly in the sidebar directory. This provides an intuitive way to understand the reference situation of your code. In addition, by clicking on the extension sidebar, users can view a reference roadmap of each file in the entire project, which is very helpful for understanding and optimizing code structure. Whether you are engaged in daily development work or trying to understand a new project, CodeRefTracker is an indispensable tool.",
-  "version": "0.0.1",
+  "name": "refmap",
+  "displayName": "RefMap",
+  "description": "Your project's reference map — visualize file dependencies at a glance.",
+  "version": "0.1.0",
+  "publisher": "lsss",
+  "license": "MIT",
   "engines": {
     "vscode": "^1.85.0"
   },
   "categories": [
-    "Other",
-    "Visualization"
+    "Visualization",
+    "Other"
   ],
-  "activationEvents": [
-    "*"
+  "keywords": [
+    "dependency",
+    "reference",
+    "graph",
+    "visualization",
+    "import"
   ],
-  "main": "./out/extension.js",
+  "activationEvents": [],
+  "main": "./dist/extension.js",
   "contributes": {
     "commands": [
       {
-        "command": "codeRefTracker.showGraph",
-        "title": "Show Code References Graph"
+        "command": "refmap.openGraph",
+        "title": "Open Reference Map",
+        "category": "RefMap",
+        "icon": "$(type-hierarchy)"
       },
       {
-        "command": "codeRefTracker.refreshReferences",
-        "title": "Refresh Code References",
+        "command": "refmap.showInGraph",
+        "title": "Show in RefMap",
+        "category": "RefMap"
+      },
+      {
+        "command": "refmap.refresh",
+        "title": "Refresh",
+        "category": "RefMap",
         "icon": "$(refresh)"
-      },
-      {
-        "command": "codeRefTracker.sortByName",
-        "title": "Sort by Name",
-        "icon": "$(list-ordered)"
-      },
-      {
-        "command": "codeRefTracker.sortByIncoming",
-        "title": "Sort by Most Referenced",
-        "icon": "$(arrow-down)"
-      },
-      {
-        "command": "codeRefTracker.sortByOutgoing",
-        "title": "Sort by Most Dependencies",
-        "icon": "$(arrow-up)"
-      },
-      {
-        "command": "codeRefTracker.filterOrphans",
-        "title": "Show Orphans Only",
-        "icon": "$(circle-outline)"
-      },
-      {
-        "command": "codeRefTracker.resetFilter",
-        "title": "Reset Filters",
-        "icon": "$(clear-all)"
       }
     ],
+    "configuration": {
+      "title": "RefMap",
+      "properties": {
+        "refmap.exclude": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "description": "Additional glob patterns to exclude from scanning (e.g. \"**/scripts/**\", \"**/docs/**\")."
+        },
+        "refmap.useGitignore": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically exclude files listed in .gitignore."
+        }
+      }
+    },
     "menus": {
-      "view/title": [
+      "explorer/context": [
         {
-          "command": "codeRefTracker.refreshReferences",
-          "when": "view == codeReferencesExplorer",
-          "group": "navigation"
-        },
-        {
-          "command": "codeRefTracker.sortByName",
-          "when": "view == codeReferencesExplorer",
-          "group": "1_sort"
-        },
-        {
-          "command": "codeRefTracker.sortByIncoming",
-          "when": "view == codeReferencesExplorer",
-          "group": "1_sort"
-        },
-        {
-          "command": "codeRefTracker.sortByOutgoing",
-          "when": "view == codeReferencesExplorer",
-          "group": "1_sort"
-        },
-        {
-          "command": "codeRefTracker.filterOrphans",
-          "when": "view == codeReferencesExplorer",
-          "group": "2_filter"
-        },
-        {
-          "command": "codeRefTracker.resetFilter",
-          "when": "view == codeReferencesExplorer",
-          "group": "2_filter"
-        },
-        {
-          "command": "codeRefTracker.showGraph",
-          "when": "view == codeReferencesExplorer",
-          "group": "navigation"
-        }
-      ]
-    },
-    "viewsContainers": {
-      "activitybar": [
-        {
-          "id": "code-references",
-          "title": "Code References",
-          "icon": "resources/icon.svg"
-        }
-      ]
-    },
-    "views": {
-      "code-references": [
-        {
-          "id": "codeReferencesExplorer",
-          "name": "References Explorer"
-        },
-        {
-          "id": "codeRefTracker.graphView",
-          "name": "Reference Graph"
+          "command": "refmap.showInGraph",
+          "group": "navigation@100",
+          "when": "resourceScheme == file"
         }
       ]
     }
   },
   "scripts": {
-    "vscode:prepublish": "npm run compile",
-    "compile": "tsc -p ./",
-    "watch": "tsc -watch -p ./",
-    "pretest": "npm run compile && npm run lint",
-    "lint": "eslint src --ext ts",
-    "test": "node ./out/test/runTest.js",
-    "build:webview": "webpack --mode production",
-    "dev:webview": "webpack --mode development --watch"
+    "vscode:prepublish": "npm run build",
+    "build": "webpack --mode production",
+    "compile": "webpack --mode development",
+    "watch": "webpack --mode development --watch"
+  },
+  "dependencies": {
+    "d3": "^7.9.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
   },
   "devDependencies": {
     "@types/d3": "^7.4.3",
-    "@types/glob": "^8.1.0",
-    "@types/mocha": "^10.0.1",
-    "@types/node": "16.x",
-    "@types/react": "^18.2.45",
+    "@types/node": "^20.11.0",
+    "@types/react": "^18.2.48",
     "@types/react-dom": "^18.2.18",
     "@types/vscode": "^1.85.0",
-    "@typescript-eslint/eslint-plugin": "^5.56.0",
-    "@typescript-eslint/parser": "^5.56.0",
-    "@vscode/test-electron": "^2.3.0",
-    "autoprefixer": "^10.4.16",
-    "css-loader": "^6.8.1",
-    "eslint": "^8.36.0",
-    "glob": "^8.1.0",
-    "mocha": "^10.2.0",
-    "postcss": "^8.4.32",
-    "postcss-loader": "^7.3.3",
-    "style-loader": "^3.3.3",
-    "tailwindcss": "^3.3.6",
+    "autoprefixer": "^10.4.17",
+    "css-loader": "^6.9.1",
+    "mini-css-extract-plugin": "^2.7.7",
+    "postcss": "^8.4.33",
+    "postcss-loader": "^8.1.0",
+    "style-loader": "^3.3.4",
+    "tailwindcss": "^3.4.1",
     "ts-loader": "^9.5.1",
-    "webpack": "^5.89.0",
+    "typescript": "^5.3.3",
+    "webpack": "^5.90.0",
     "webpack-cli": "^5.1.4"
-  },
-  "dependencies": {
-    "@egjs/hammerjs": "^2.0.17",
-    "@types/cytoscape": "^3.21.9",
-    "component-emitter": "^2.0.0",
-    "cytoscape": "^3.32.0",
-    "cytoscape-dagre": "^2.5.0",
-    "d3": "^7.8.5",
-    "ignore": "^5.3.0",
-    "keycharm": "^0.4.0",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "react-force-graph": "^1.44.1",
-    "recharts": "^3.0.0",
-    "uuid": "^11.1.0",
-    "vis-data": "^7.1.9",
-    "vis-network": "^9.1.12",
-    "vis-util": "^5.0.7",
-    "typescript": "^4.9.5"
   }
 }

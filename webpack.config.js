@@ -1,10 +1,38 @@
 const path = require('path');
+const MiniCssExtractPlugin = require('mini-css-extract-plugin');
 
-module.exports = {
+const extensionConfig = {
+  target: 'node',
+  entry: './src/extension.ts',
+  output: {
+    path: path.resolve(__dirname, 'dist'),
+    filename: 'extension.js',
+    libraryTarget: 'commonjs2',
+  },
+  externals: {
+    vscode: 'commonjs vscode',
+  },
+  resolve: {
+    extensions: ['.ts', '.js'],
+  },
+  module: {
+    rules: [
+      {
+        test: /\.ts$/,
+        use: [{ loader: 'ts-loader', options: { transpileOnly: true } }],
+        exclude: /node_modules/,
+      },
+    ],
+  },
+  devtool: 'nosources-source-map',
+};
+
+const webviewConfig = {
+  target: 'web',
   entry: './src/webview/index.tsx',
   output: {
-    path: path.resolve(__dirname, 'out', 'webview'),
-    filename: 'bundle.js',
+    path: path.resolve(__dirname, 'dist'),
+    filename: 'webview.js',
   },
   resolve: {
     extensions: ['.ts', '.tsx', '.js', '.jsx'],
@@ -13,28 +41,19 @@ module.exports = {
     rules: [
       {
         test: /\.tsx?$/,
-        use: 'ts-loader',
+        use: [{ loader: 'ts-loader', options: { transpileOnly: true } }],
         exclude: /node_modules/,
       },
       {
         test: /\.css$/,
-        use: [
-          'style-loader',
-          'css-loader',
-          {
-            loader: 'postcss-loader',
-            options: {
-              postcssOptions: {
-                plugins: [
-                  require('tailwindcss'),
-                  require('autoprefixer'),
-                ],
-              },
-            },
-          },
-        ],
+        use: [MiniCssExtractPlugin.loader, 'css-loader', 'postcss-loader'],
       },
     ],
   },
-  devtool: 'source-map',
-}; 
+  plugins: [
+    new MiniCssExtractPlugin({ filename: 'webview.css' }),
+  ],
+  devtool: 'nosources-source-map',
+};
+
+module.exports = [extensionConfig, webviewConfig];
